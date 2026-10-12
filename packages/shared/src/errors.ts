@@ -18,6 +18,7 @@ export const errorCode = z.enum([
   "name_conflict",
   "invalid_move",
   "quota_exceeded",
+  "version_is_current",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof errorCode>;

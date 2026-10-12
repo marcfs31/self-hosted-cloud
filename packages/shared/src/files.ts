@@ -18,6 +18,13 @@ import { z } from "zod";
  *                                        Content-Security-Policy: sandbox; default-src 'none'.
  *   GET    /usage                      → UsageResponse
  *
+ * Version history (files only; every upload or replace adds a version):
+ *   GET    /files/:id/versions                      → VersionListing (newest first)
+ *   GET    /files/:id/versions/:versionId/content   → that version's bytes (same headers as content)
+ *   POST   /files/:id/versions/:versionId/restore   → FileNode; makes that version current
+ *                                                    (no copy; newer versions stay listed)
+ *   DELETE /files/:id/versions/:versionId           → 204; the current version → 409 version_is_current
+ *
  *   GET    /trash                      → TrashListing (top-level trashed items, most recently trashed first)
  *   POST   /trash/:id/restore          → FileNode; restores into the original parent, or the root
  *                                        if that parent is gone or trashed; a taken name gets
@@ -28,7 +35,9 @@ import { z } from "zod";
  *
  * Uploads use the tus 1.0.0 protocol at /api/uploads (creation + termination extensions).
  *   Upload-Metadata (base64 values): `filename` (required, a valid FileName) and `parentId`
- *   (required, an active folder ID). Upload-Length is required (no deferred length).
+ *   (required, an active folder ID), optional `replaceId` (an active file of the user in that
+ *   folder): the upload becomes the new current version of that file and keeps its name.
+ *   Upload-Length is required (no deferred length).
  *   Creation is refused with 413 quota_exceeded when used + in-flight + Upload-Length > quota.
  *   On completion the file is committed into the folder; a taken name gets "name (1).ext".
  *   The finished response carries the header `Cloud-File-Id: <new file id>`.
@@ -78,11 +87,28 @@ export const fileNode = z.object({
   kind: fileKind,
   size: z.number().int().nonnegative(),
   mime: z.string().nullable(),
+  /** Null for folders. */
+  currentVersionId: z.string().nullable(),
+  /** 0 for folders. */
+  versionCount: z.number().int().nonnegative(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   deletedAt: z.iso.datetime().nullable(),
 });
 export type FileNode = z.infer<typeof fileNode>;
+
+export const fileVersion = z.object({
+  id: z.string(),
+  size: z.number().int().nonnegative(),
+  mime: z.string(),
+  sha256: z.string(),
+  createdAt: z.iso.datetime(),
+  current: z.boolean(),
+});
+export type FileVersion = z.infer<typeof fileVersion>;
+
+export const versionListing = z.object({ versions: z.array(fileVersion) });
+export type VersionListing = z.infer<typeof versionListing>;
 
 export const breadcrumb = z.object({ id: z.string(), name: z.string() });
 export type Breadcrumb = z.infer<typeof breadcrumb>;
