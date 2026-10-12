@@ -7,6 +7,7 @@ export const healthResponse = z.object({
   version: z.string(),
   checks: z.object({
     storage: checkState,
+    database: checkState,
   }),
 });
 export type HealthResponse = z.infer<typeof healthResponse>;
