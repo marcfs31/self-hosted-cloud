@@ -4,29 +4,30 @@ Status: draft v2, 2026-10-13. Scope of v1: a private Dropbox/Nextcloud-style fil
 (upload, browse, download, share) for a household, reachable from anywhere.
 
 Settled decisions:
+
 - **Package manager: pnpm** (workspaces). Not npm, not Bun.
 - **Runtime: Node.js 24 LTS** everywhere, including production on the Pi.
 - **Language: TypeScript `strict`, ESM, for 100 % of the code.** No Python, so no uv.
 
 ## 1. Stack
 
-| Concern | Choice | Why |
-|---|---|---|
-| Hardware | Raspberry Pi 5, 8 GB, NVMe SSD via M.2 HAT (or USB 3 SSD), active cooler, official 27 W PSU | SD cards die under write load; the SSD holds OS, DB and files. |
-| OS | Raspberry Pi OS Lite 64-bit (arm64), headless, SSH keys only | 64-bit is required for current Node and native modules. |
-| Runtime | Node.js 24 LTS, pinned in `.nvmrc` and the Docker base image | Next.js and every native module we use are built and tested on Node. |
-| Package manager | pnpm, pinned via `"packageManager": "pnpm@<x.y.z>"` in root `package.json` | Fast, disk-efficient, strict: a package can only import what it declares. |
-| UI | Next.js (App Router) + React 19, `output: "standalone"` | Standalone output is a small self-contained server — fits the Pi's RAM. |
-| API | Express 5 | Sole owner of disk and DB: auth, streaming uploads/downloads, quotas. |
-| Uploads | tus protocol: `@tus/server` + `@tus/file-store`, `tus-js-client` in the browser | Large uploads over flaky links resume instead of restarting. |
-| DB | SQLite (WAL) via `better-sqlite3` + Drizzle ORM and migrations | One file, zero ops, typed schema. |
-| Validation | `zod` in `packages/shared` | One schema → API validation + client types. |
-| Passwords | `@node-rs/argon2` (Argon2id, prebuilt arm64 binaries) | Modern KDF, no compiler needed on the Pi. |
-| Proxy / TLS | Caddy | Automatic HTTPS, one small config file. |
-| Remote access | Tailscale — no open router ports | Removes the public-internet attack surface. Cloudflare Tunnel if guests without Tailscale need access. |
-| Packaging | Docker Compose; arm64 images built in CI | Reproducible, rollback by image tag, nothing compiles on the Pi. |
-| Tests | Vitest (unit), Supertest (API), Playwright + axe (e2e, accessibility) | |
-| Backups | restic → second USB disk + off-site target | One copy of your data is not a cloud. |
+| Concern         | Choice                                                                                      | Why                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Hardware        | Raspberry Pi 5, 8 GB, NVMe SSD via M.2 HAT (or USB 3 SSD), active cooler, official 27 W PSU | SD cards die under write load; the SSD holds OS, DB and files.                                         |
+| OS              | Raspberry Pi OS Lite 64-bit (arm64), headless, SSH keys only                                | 64-bit is required for current Node and native modules.                                                |
+| Runtime         | Node.js 24 LTS, pinned in `.nvmrc` and the Docker base image                                | Next.js and every native module we use are built and tested on Node.                                   |
+| Package manager | pnpm, pinned via `"packageManager": "pnpm@<x.y.z>"` in root `package.json`                  | Fast, disk-efficient, strict: a package can only import what it declares.                              |
+| UI              | Next.js (App Router) + React 19, `output: "standalone"`                                     | Standalone output is a small self-contained server — fits the Pi's RAM.                                |
+| API             | Express 5                                                                                   | Sole owner of disk and DB: auth, streaming uploads/downloads, quotas.                                  |
+| Uploads         | tus protocol: `@tus/server` + `@tus/file-store`, `tus-js-client` in the browser             | Large uploads over flaky links resume instead of restarting.                                           |
+| DB              | SQLite (WAL) via `better-sqlite3` + Drizzle ORM and migrations                              | One file, zero ops, typed schema.                                                                      |
+| Validation      | `zod` in `packages/shared`                                                                  | One schema → API validation + client types.                                                            |
+| Passwords       | `@node-rs/argon2` (Argon2id, prebuilt arm64 binaries)                                       | Modern KDF, no compiler needed on the Pi.                                                              |
+| Proxy / TLS     | Caddy                                                                                       | Automatic HTTPS, one small config file.                                                                |
+| Remote access   | Tailscale — no open router ports                                                            | Removes the public-internet attack surface. Cloudflare Tunnel if guests without Tailscale need access. |
+| Packaging       | Docker Compose; arm64 images built in CI                                                    | Reproducible, rollback by image tag, nothing compiles on the Pi.                                       |
+| Tests           | Vitest (unit), Supertest (API), Playwright + axe (e2e, accessibility)                       |                                                                                                        |
+| Backups         | restic → second USB disk + off-site target                                                  | One copy of your data is not a cloud.                                                                  |
 
 ## 2. Architecture
 
@@ -80,12 +81,12 @@ Workspace conventions:
   list is also the record of every package allowed to run code at install time.
 - Root scripts fan out with filters:
 
-  | Command | Does |
-  |---|---|
-  | `pnpm dev` | `pnpm -r --parallel dev` (Next on :3000, API via `tsx watch` on :4000) |
-  | `pnpm check` | typecheck + lint + test across all packages — **the gate** |
-  | `pnpm --filter @cloud/api test` | one package's tests while iterating |
-  | `pnpm build` | `pnpm -r build` (shared → api → web, in dependency order) |
+  | Command                         | Does                                                                   |
+  | ------------------------------- | ---------------------------------------------------------------------- |
+  | `pnpm dev`                      | `pnpm -r --parallel dev` (Next on :3000, API via `tsx watch` on :4000) |
+  | `pnpm check`                    | typecheck + lint + test across all packages — **the gate**             |
+  | `pnpm --filter @cloud/api test` | one package's tests while iterating                                    |
+  | `pnpm build`                    | `pnpm -r build` (shared → api → web, in dependency order)              |
 
 ## 4. Data model (v1)
 
@@ -114,6 +115,7 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 ## 6. Phases (each ends shippable, tagged, with its own tests)
 
 ### Phase 0 — Foundation (0.1.0)
+
 - `git init`, pnpm workspace with the three packages, strict `tsconfig.base.json`
   (project references), ESLint, Prettier, Vitest.
 - CI: `pnpm/action-setup` + `actions/setup-node` (pnpm cache) → `pnpm install --frozen-lockfile`
@@ -122,6 +124,7 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 - **Done when:** `pnpm check` is green locally and in CI.
 
 ### Phase 1 — Pi baseline (0.2.0)
+
 - Flash Pi OS Lite 64-bit, boot from NVMe, SSH keys only, `ufw` default-deny,
   unattended security upgrades, Docker + Compose, Tailscale.
 - Mount the data disk at `/data` (ext4, `noatime`).
@@ -129,12 +132,14 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 - **Done when:** `https://<pi>.<tailnet>.ts.net/api/health` answers from a phone off Wi-Fi.
 
 ### Phase 2 — Auth (0.3.0)
+
 - First-run setup creates the admin; admin invites users.
 - Login/logout, Argon2id, session cookie, rate-limited login, CSRF protection on
   state-changing routes (SameSite + Origin check).
 - **Done when:** Supertest covers login success/failure/lockout and expired sessions.
 
 ### Phase 3 — Files core (0.4.0)
+
 - Browse folders, create/rename/move, delete-to-trash and restore.
 - tus resumable uploads; streaming downloads with `Range` support (video seeking).
 - Quota enforced before an upload accepts bytes.
@@ -144,16 +149,19 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
   (`../`, URL-encoded, symlinks) are all rejected.
 
 ### Phase 4 — Sharing (0.5.0)
+
 - Public share links with expiry and optional password; read-only.
 - **Done when:** expired or revoked links return 404, never the file.
 
 ### Phase 5 — Media & extras (0.6.0+)
+
 - Image thumbnails with `sharp`, video posters with `ffmpeg`, in a worker with
   concurrency 1–2; photo timeline view.
 - Optional: WebDAV endpoint so OS file managers can mount the cloud.
 
 ### Phase 6 — Operations (1.0.0)
-- restic nightly backups + a documented, *tested* restore.
+
+- restic nightly backups + a documented, _tested_ restore.
 - Disk-health (`smartctl`) and free-space alerts, log rotation.
 - Updates: CI pushes tagged images → `docker compose pull && docker compose up -d` on the
   Pi; rollback = previous tag. Migrations are expand/contract so rollback stays safe.
