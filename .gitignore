@@ -14,3 +14,5 @@ playwright-report/
 test-results/
 .DS_Store
 graft/
+
+.claude/worktrees/
