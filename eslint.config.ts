@@ -16,6 +16,30 @@ export default tseslint.config(
     },
   },
   {
+    files: ["apps/web/**"],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@cloud/shared",
+              allowTypeImports: true,
+              message: "apps/web imports only types from @cloud/shared.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["@cloud/api", "@cloud/api/*", "better-sqlite3", "drizzle-orm*", "node:fs*"],
+              message: "apps/web never touches the API's storage.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.config.ts", "eslint.config.ts", "scripts/**"],
     extends: [tseslint.configs.disableTypeChecked],
   },
