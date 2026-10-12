@@ -2,8 +2,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-const WEB_PORT = 3100;
-const API_PORT = 4100;
+// Parallel worktrees run e2e at the same time, so ports are configurable.
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3100);
+const API_PORT = Number(process.env.E2E_API_PORT ?? 4100);
 const WEB_ORIGIN = `http://localhost:${WEB_PORT}`;
 
 // A fresh data directory per run keeps the first-run flow reproducible. It is created by the
