@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+next-env.d.ts
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+/data/
+*.sqlite
+*.sqlite-*
+playwright-report/
+test-results/
+.DS_Store
+graft/
