@@ -6,17 +6,18 @@ FROM node:24-slim AS fetch
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true
 RUN corepack enable
+# Toolchain for native modules (better-sqlite3) when no prebuilt binary matches. pnpm fetch
+# already runs their install scripts, so it is needed from this stage on. The runtime stage
+# starts from a fresh base image and never inherits it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm fetch
 
 # ---- build: compile TypeScript and produce a prod-only deploy folder
 FROM fetch AS build
-# Toolchain for native modules (better-sqlite3, @node-rs/argon2) when no prebuilt binary
-# matches. Build stage only; never reaches the runtime image.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
