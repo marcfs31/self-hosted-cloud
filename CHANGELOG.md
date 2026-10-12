@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
+### Added
+
+- SQLite database (WAL) with Drizzle migrations at `<DATA_DIR>/db/cloud.sqlite`; health reports it.
+- First-run setup creates the admin; login and logout with Argon2id passwords.
+- Sessions in an HttpOnly cookie, stored as SHA-256 hashes, 30-day sliding expiry.
+- Invites (admin creates, single use, expiring, revocable) and member registration.
+- Admin page to change members' role and quota.
+- Login, setup and registration rate limiting (5 failures per 15 minutes).
+- Same-origin check on every state-changing request; errors are codes, never free text.
+- Web sign-in pages, admin UI, and end-to-end tests with axe accessibility checks in CI.
+
+### Fixed
+
+- The api image now builds when native modules must be compiled from source.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added
