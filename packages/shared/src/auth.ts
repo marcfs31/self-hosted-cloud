@@ -10,7 +10,7 @@ import { z } from "zod";
  *   POST   /auth/logout           → 204                            (session)
  *   GET    /auth/me               → MeResponse                     (session)
  *
- *   GET    /admin/users           → ListUsersResponse              (admin)
+ *   GET    /admin/users           → ListUsersResponse              (admin; includes usedBytes)
  *   PATCH  /admin/users/:id       UpdateUserRequest → User  (admin; not on self)
  *   GET    /admin/invites         → ListInvitesResponse            (admin)
  *   POST   /admin/invites         CreateInviteRequest → CreatedInviteResponse (admin; token shown once)
@@ -64,7 +64,10 @@ export type RegisterRequest = z.input<typeof registerRequest>;
 export const meResponse = z.object({ user });
 export type MeResponse = z.infer<typeof meResponse>;
 
-export const listUsersResponse = z.object({ users: z.array(user) });
+export const userSummary = user.extend({ usedBytes: z.number().int().nonnegative() });
+export type UserSummary = z.infer<typeof userSummary>;
+
+export const listUsersResponse = z.object({ users: z.array(userSummary) });
 export type ListUsersResponse = z.infer<typeof listUsersResponse>;
 
 export const updateUserRequest = z

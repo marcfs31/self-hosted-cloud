@@ -15,6 +15,9 @@ export const errorCode = z.enum([
   "invite_invalid",
   "email_taken",
   "cannot_change_self",
+  "name_conflict",
+  "invalid_move",
+  "quota_exceeded",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof errorCode>;

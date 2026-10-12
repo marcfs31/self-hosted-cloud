@@ -1,0 +1,130 @@
+import { z } from "zod";
+
+/*
+ * Files contract (all under /api, all require a session, all scoped to the session user).
+ * Clients address files and folders by ID only; a missing or foreign ID is 404 not_found.
+ *
+ *   GET    /files/root                 → FolderListing  (creates the user's root folder on first use)
+ *   GET    /folders/:id                → FolderListing  (folder must not be trashed)
+ *   POST   /folders                    CreateFolderRequest → FileNode (201); taken name → 409 name_conflict
+ *   PATCH  /files/:id                  UpdateFileRequest → FileNode (rename and/or move)
+ *                                        taken name → 409 name_conflict; into itself/descendant or
+ *                                        touching the root → 409 invalid_move
+ *   DELETE /files/:id                  → 204 (moves the item and its subtree to the trash)
+ *   GET    /files/:id/content          → bytes with Range/ETag support. `?download=1` forces
+ *                                        attachment. Served inline only for INLINE_MIME_TYPES,
+ *                                        otherwise as an attachment of application/octet-stream.
+ *                                        Always sends X-Content-Type-Options: nosniff and
+ *                                        Content-Security-Policy: sandbox; default-src 'none'.
+ *   GET    /usage                      → UsageResponse
+ *
+ *   GET    /trash                      → TrashListing (top-level trashed items, most recently trashed first)
+ *   POST   /trash/:id/restore          → FileNode; restores into the original parent, or the root
+ *                                        if that parent is gone or trashed; a taken name gets
+ *                                        "name (1).ext" (see uniqueName).
+ *   DELETE /trash/:id                  → 204 permanent delete of the item and its subtree (rows + blobs)
+ *   DELETE /trash                      → 204 empty the trash
+ *   Trashed items older than TRASH_RETENTION_DAYS are purged automatically.
+ *
+ * Uploads use the tus 1.0.0 protocol at /api/uploads (creation + termination extensions).
+ *   Upload-Metadata (base64 values): `filename` (required, a valid FileName) and `parentId`
+ *   (required, an active folder ID). Upload-Length is required (no deferred length).
+ *   Creation is refused with 413 quota_exceeded when used + in-flight + Upload-Length > quota.
+ *   On completion the file is committed into the folder; a taken name gets "name (1).ext".
+ *   The finished response carries the header `Cloud-File-Id: <new file id>`.
+ *   Error bodies are JSON {error:{code}} like every other endpoint.
+ */
+
+export const TRASH_RETENTION_DAYS = 30;
+
+/** MIME types that are safe to render inline in the browser; everything else downloads. */
+export const INLINE_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "video/mp4",
+  "video/webm",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "application/pdf",
+  "text/plain",
+] as const;
+
+const FORBIDDEN_NAME = /[/\\\u0000-\u001f\u007f]/;
+
+export const fileName = z
+  .string()
+  .transform((s) => s.normalize("NFC"))
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(255)
+      .refine((s) => !FORBIDDEN_NAME.test(s), "contains a forbidden character")
+      .refine((s) => s !== "." && s !== "..", "reserved name")
+      .refine((s) => s.trim() === s, "leading or trailing whitespace"),
+  );
+
+export const fileKind = z.enum(["file", "folder"]);
+export type FileKind = z.infer<typeof fileKind>;
+
+export const fileNode = z.object({
+  id: z.string(),
+  parentId: z.string().nullable(),
+  name: z.string(),
+  kind: fileKind,
+  size: z.number().int().nonnegative(),
+  mime: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable(),
+});
+export type FileNode = z.infer<typeof fileNode>;
+
+export const breadcrumb = z.object({ id: z.string(), name: z.string() });
+export type Breadcrumb = z.infer<typeof breadcrumb>;
+
+export const folderListing = z.object({
+  folder: fileNode,
+  /** Root first, current folder last. The root's name is "". */
+  breadcrumbs: z.array(breadcrumb),
+  /** Folders first, then files; each group sorted by name (case-insensitive). */
+  children: z.array(fileNode),
+});
+export type FolderListing = z.infer<typeof folderListing>;
+
+export const createFolderRequest = z.object({ parentId: z.string(), name: fileName });
+export type CreateFolderRequest = z.input<typeof createFolderRequest>;
+
+export const updateFileRequest = z
+  .object({ name: fileName.optional(), parentId: z.string().optional() })
+  .refine((v) => v.name !== undefined || v.parentId !== undefined);
+export type UpdateFileRequest = z.input<typeof updateFileRequest>;
+
+export const trashListing = z.object({ items: z.array(fileNode) });
+export type TrashListing = z.infer<typeof trashListing>;
+
+export const usageResponse = z.object({
+  usedBytes: z.number().int().nonnegative(),
+  quotaBytes: z.number().int().nonnegative(),
+});
+export type UsageResponse = z.infer<typeof usageResponse>;
+
+/**
+ * Collision policy for uploads and restores: "report.pdf" → "report (1).pdf" → "report (2).pdf".
+ * Folders and dotfiles without an extension get the suffix at the end.
+ */
+export function uniqueName(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name)) return name;
+  const dot = name.lastIndexOf(".");
+  const hasExt = dot > 0;
+  const stem = hasExt ? name.slice(0, dot) : name;
+  const ext = hasExt ? name.slice(dot) : "";
+  for (let n = 1; ; n++) {
+    const candidate = `${stem} (${n})${ext}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
