@@ -42,12 +42,15 @@ Invariants (one owner each):
 
 - **Express is the only process that touches `/data`** (files and DB). Next.js renders UI
   and forwards the session cookie; it has no DB driver and no volume mount for `/data`.
-- **One function, `resolveUserPath()`, turns client paths into disk paths** and rejects
-  anything outside the user's root (`..`, encoded variants, symlinks) before any `fs` call.
+- **Clients address files by ID, never by path** (decided 2026-10-13, replacing a
+  `resolveUserPath()` guard). Blobs live at `/data/files/<ownerId>/<id[0..2]>/<id>`; names and
+  the folder tree exist only in SQLite. No client string is ever joined into a filesystem
+  path, which removes path traversal as a class instead of guarding against it.
 - **Writes are atomic:** stream to `/data/tmp`, fsync, `rename` into place, and write the
   metadata row in the same SQLite transaction that commits the move.
 - **Quota usage is derived** from the `files` table, updated only inside that transaction.
-- **Files are plain files on disk**, not blobs in SQLite — readable and restorable without the app.
+- **File contents are plain files on disk**, not blobs in SQLite; names live in the DB, so a
+  restore needs both (the backup takes a consistent DB snapshot alongside the blobs).
 
 ## 3. Repository layout (pnpm workspace)
 
@@ -57,7 +60,7 @@ self-hosted-cloud/
 │   ├── web/                  # @cloud/web  — Next.js UI
 │   └── api/                  # @cloud/api  — Express 5
 │       ├── src/routes/       # auth, files, shares, admin
-│       ├── src/storage/      # resolveUserPath, atomic writes, tus store
+│       ├── src/storage/      # blob paths, atomic writes, tus store
 │       └── src/db/           # Drizzle schema + migrations
 ├── packages/
 │   └── shared/               # @cloud/shared — zod schemas, API types, error codes
@@ -145,8 +148,9 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 - Quota enforced before an upload accepts bytes.
 - UI: file list, breadcrumbs, drag-and-drop upload with progress, keyboard accessible,
   usable at 320 px.
-- **Done when:** a 5 GB upload survives a network drop and resumes; traversal tests
-  (`../`, URL-encoded, symlinks) are all rejected.
+- **Done when:** an interrupted upload resumes from its last offset; names containing `/`,
+  `\\`, control characters, `.` or `..` are rejected; user B gets 404 for every one of user
+  A's file and upload IDs.
 
 ### Phase 4 — Sharing (0.5.0)
 
@@ -157,9 +161,9 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 
 - Image thumbnails with `sharp`, video posters with `ffmpeg`, in a worker with
   concurrency 1–2; photo timeline view.
-- Optional: WebDAV endpoint so OS file managers can mount the cloud.
+- Deferred: WebDAV endpoint so OS file managers can mount the cloud (not in v1).
 
-### Phase 6 — Operations (1.0.0)
+### Phase 6 — Operations (0.7.0; 1.0.0 after a verified run on real Pi hardware)
 
 - restic nightly backups + a documented, _tested_ restore.
 - Disk-health (`smartctl`) and free-space alerts, log rotation.
@@ -177,7 +181,10 @@ Two images, both built for `linux/arm64` in CI with `docker buildx`:
 
 ## 8. Decisions you should own (good places to write the code yourself)
 
-1. `resolveUserPath()` — the path-traversal guard (security-critical, ~10 lines).
-2. Name-collision policy on upload (overwrite, `name (1).ext`, or ask).
-3. Trash retention (forever, 30 days, or until quota pressure).
-4. Share-link defaults (expiry length, password required or optional).
+Defaults chosen during the build; each lives in one place and is easy to change.
+
+1. ~~`resolveUserPath()`~~ — superseded by ID-addressed storage (see §2).
+2. Name collisions: uploads and restores get `name (1).ext`; creating or renaming onto an
+   existing name is refused with `name_conflict`. Nothing is ever overwritten silently.
+3. Trash retention: 30 days, then purged automatically.
+4. Share links: 7-day default expiry (1–365 or never), password optional.
