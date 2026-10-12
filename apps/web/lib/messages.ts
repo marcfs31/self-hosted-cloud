@@ -1,0 +1,136 @@
+import type { ErrorCode, Role } from "@cloud/shared";
+
+/** Every UI string lives here. Components never contain literal copy. */
+
+const errors: Record<ErrorCode, string> = {
+  invalid_request: "Some of the details don't look right. Please check them and try again.",
+  unauthenticated: "Your session has ended. Please log in again.",
+  not_found: "We couldn't find that. It may have been removed.",
+  origin_rejected:
+    "This request didn't come from the page it should have. Reload the page and try again.",
+  too_many_attempts: "Too many attempts for now. Please wait a few minutes and try again.",
+  setup_already_done: "This cloud is already set up. Log in instead.",
+  invalid_credentials: "That email and password don't match. Please try again.",
+  invite_invalid: "This invite link isn't valid any more. Ask the admin for a new one.",
+  email_taken: "An account with that email already exists.",
+  cannot_change_self: "You can't change your own account here.",
+  internal: "Something went wrong on our side. Please try again in a moment.",
+};
+
+const roles: Record<Role, string> = {
+  admin: "Admin",
+  member: "Member",
+};
+
+export const messages = {
+  app: {
+    name: "Cloud",
+    loading: "Loading…",
+    skipToContent: "Skip to content",
+    retry: "Try again",
+    mainNavLabel: "Main",
+  },
+  errors,
+  roles,
+  nav: {
+    files: "Files",
+    admin: "Admin",
+    logout: "Log out",
+    loggingOut: "Logging out…",
+  },
+  account: {
+    email: "Email",
+    password: "Password",
+    passwordHint: "At least 12 characters. A few random words work well.",
+    confirm: "Confirm password",
+    passwordTooShort: "The password needs at least 12 characters.",
+    passwordMismatch: "The two passwords don't match.",
+  },
+  setup: {
+    title: "Set up your cloud",
+    intro: "Create the first account. It will be the admin.",
+    submit: "Create admin account",
+    submitting: "Creating…",
+  },
+  login: {
+    title: "Log in",
+    email: "Email",
+    password: "Password",
+    submit: "Log in",
+    submitting: "Logging in…",
+    noAccount: "Need an account? Ask the admin of this cloud for an invite link.",
+  },
+  register: {
+    title: "Accept your invite",
+    intro: "Choose an email and password to create your account.",
+    submit: "Create account",
+    submitting: "Creating…",
+    missingToken: "This invite link is incomplete. Ask the admin for a new one.",
+    haveAccount: "Already have an account?",
+    loginLink: "Log in",
+  },
+  home: {
+    title: "Files",
+    signedInAs: (email: string) => `Signed in as ${email}`,
+    comingSoon: "File browsing arrives in the next release.",
+  },
+  notFound: {
+    title: "Page not found",
+    body: "This page doesn't exist, or you don't have access to it.",
+    home: "Back to files",
+  },
+  admin: {
+    title: "Admin",
+    users: {
+      title: "Users",
+      caption: "Users",
+      email: "Email",
+      role: "Role",
+      quota: "Quota (GiB)",
+      created: "Created",
+      actions: "Actions",
+      you: "You",
+      roleFor: (email: string) => `Role for ${email}`,
+      quotaFor: (email: string) => `Quota in GiB for ${email}`,
+      save: "Save",
+      saving: "Saving…",
+      saveFor: (email: string) => `Save changes for ${email}`,
+      saved: "Saved",
+      quotaInvalid: "Enter the quota as a number of GiB, for example 50 or 1.5.",
+      loading: "Loading users…",
+    },
+    invites: {
+      title: "Invites",
+      caption: "Invites",
+      createTitle: "Create an invite",
+      role: "Role",
+      expiresInDays: "Expires after (days)",
+      expiresHint: "Between 1 and 30 days.",
+      create: "Create invite",
+      creating: "Creating…",
+      createdTitle: "Invite created",
+      linkLabel: "Invite link",
+      linkNote:
+        "This link won't be shown again. Copy it now and share it with the person you invite.",
+      copy: "Copy",
+      copied: "Copied to the clipboard",
+      copyFailed: "Couldn't copy automatically. Select the link and copy it yourself.",
+      dismiss: "Hide link",
+      colRole: "Role",
+      colCreated: "Created",
+      colExpires: "Expires",
+      colStatus: "Status",
+      colActions: "Actions",
+      status: {
+        active: "Active",
+        used: "Used",
+        expired: "Expired",
+      },
+      revoke: "Revoke",
+      revoking: "Revoking…",
+      revokeFor: (role: string, created: string) => `Revoke ${role} invite created ${created}`,
+      empty: "No invites yet.",
+      loading: "Loading invites…",
+    },
+  },
+} as const;
