@@ -1,0 +1,112 @@
+# Self-hosted cloud stack: caddy (TLS + routing) -> web (Next.js UI) + api (Express).
+#
+# Production (Pi):  cp .env.example .env && edit  ->  docker compose pull && docker compose up -d
+# Local build:      docker compose build          (each image has a build: section)
+#
+# Only caddy publishes ports. Only api sees /data.
+
+name: cloud
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    <<: *hardening
+    # Caddy must bind 80/443 and write its own state (volumes below).
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      CLOUD_DOMAIN: ${CLOUD_DOMAIN:?set CLOUD_DOMAIN}
+    ports:
+      # CLOUD_BIND_IP narrows exposure (e.g. the Tailscale IP). Docker-published ports
+      # bypass ufw, so see deploy/pi-setup.md before leaving it at the default.
+      - "${CLOUD_BIND_IP:-0.0.0.0}:80:80"
+      - "${CLOUD_BIND_IP:-0.0.0.0}:443:443"
+      - "${CLOUD_BIND_IP:-0.0.0.0}:443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      # Lets Caddy fetch *.ts.net certificates from the host's tailscaled automatically.
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging: *logging
+
+  web:
+    image: ${CLOUD_IMAGE_PREFIX:?set CLOUD_IMAGE_PREFIX}-web:${CLOUD_VERSION:?set CLOUD_VERSION}
+    build:
+      context: ../
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    <<: *hardening
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging: *logging
+
+  api:
+    image: ${CLOUD_IMAGE_PREFIX:?set CLOUD_IMAGE_PREFIX}-api:${CLOUD_VERSION:?set CLOUD_VERSION}
+    build:
+      context: ../
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+      PUBLIC_ORIGIN: https://${CLOUD_DOMAIN:?set CLOUD_DOMAIN}
+    expose:
+      - "4000"
+    volumes:
+      # The only service with /data. Host directories must be owned by uid/gid 1000.
+      - /data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

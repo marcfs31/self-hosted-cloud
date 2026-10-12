@@ -1,0 +1,38 @@
+# CLOUD_DOMAIN comes from the caddy container environment (deploy/.env).
+#   <host>.<tailnet>.ts.net  -> certificate from the host's tailscaled (socket mounted in compose)
+#   localhost                -> Caddy's internal CA (local smoke tests)
+
+{
+	# Pinned so the compose healthcheck can reach it; it is not published outside the container.
+	admin 127.0.0.1:2019
+}
+
+{$CLOUD_DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		-Server
+	}
+
+	# Compress everything except file downloads: they are mostly already-compressed media,
+	# and compression would get in the way of Range requests (video seeking).
+	@compressible not path /api/files/*/content
+	encode @compressible zstd gzip
+
+	# NO request body limit anywhere: resumable uploads (/api/uploads*) send large
+	# bodies. Caddy has none unless `request_body { max_size }` is set, so do not add one;
+	# the API enforces the per-user quota before it accepts bytes.
+	# flush_interval -1: stream responses (downloads) instead of buffering them.
+	handle /api/* {
+		reverse_proxy api:4000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
