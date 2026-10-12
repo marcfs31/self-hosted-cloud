@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "test": "pnpm -r test",
     "versions:check": "node scripts/check-versions.ts",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm versions:check"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm versions:check",
+    "version:set": "node scripts/set-version.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
