@@ -11,6 +11,8 @@ import { requireSameOrigin } from "./http/csrf.js";
 import { createFilesRouter } from "./files/routes.js";
 import { UPLOAD_PATH, createUploadService } from "./files/uploads.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
+import { createPublicShares } from "./shares/public.js";
+import { createSharesRouter } from "./shares/routes.js";
 
 export interface AppOptions {
   config: Config;
@@ -51,11 +53,16 @@ export function createApp({ config, version, db, now = Date.now }: AppOptions): 
   const sessions = createSessionService({ db, config, now });
 
   const uploads = createUploadService({ db, config, now });
+  const publicShares = createPublicShares({ db, config, now, uploads });
 
   app.use("/api", requireSameOrigin(config.publicOrigin));
   // tus owns its request bodies, so it is mounted before the JSON parser and without a mount
   // path (tus derives the upload ID from the full URL).
   app.all([UPLOAD_PATH, `${UPLOAD_PATH}/*rest`], sessions.requireUser, uploads.handler);
+  app.all(
+    ["/api/public/shares/:token/uploads", "/api/public/shares/:token/uploads/*rest"],
+    publicShares.uploads,
+  );
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/api/health", async (_req, res) => {
@@ -67,6 +74,8 @@ export function createApp({ config, version, db, now = Date.now }: AppOptions): 
 
   app.use("/api/auth", createAuthRouter({ db, sessions, now }));
   app.use("/api/admin", createAdminRouter({ db, sessions, now }));
+  app.use("/api/public/shares", publicShares.router);
+  app.use("/api", createSharesRouter({ db, sessions, now }));
   app.use("/api", createFilesRouter({ db, sessions, config, now }));
   app.use("/api", notFoundHandler);
   app.use(errorHandler);
