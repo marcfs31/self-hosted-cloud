@@ -15,6 +15,7 @@ import {
   type ConflictChoice,
   type ConflictState,
 } from "../../lib/upload-conflicts";
+import { previewSet } from "../../lib/preview";
 import { useFolder } from "../../lib/use-folder";
 import { NotFoundState } from "../not-found-state";
 import { UsageMeter } from "../usage-meter";
@@ -24,6 +25,7 @@ import { Breadcrumbs } from "./breadcrumbs";
 import { ConflictDialog } from "./conflict-dialog";
 import { FileTable, type RowAction } from "./file-table";
 import { MoveDialog } from "./move-dialog";
+import { PreviewDialog } from "./preview-dialog";
 import { NameDialog } from "./name-dialog";
 import { ShareDialog } from "../shares/share-dialog";
 import { VersionsDialog } from "./versions-dialog";
@@ -72,6 +74,7 @@ export function FolderView({ folderId }: { folderId: string | null }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingUpload | null>(null);
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState<ErrorCode | null>(null);
@@ -288,7 +291,14 @@ export function FolderView({ folderId }: { folderId: string | null }) {
             <p className="note">{t.empty.hint}</p>
           </div>
         ) : (
-          <FileTable folderName={title} nodes={children} onAction={onAction} />
+          <FileTable
+            folderName={title}
+            nodes={children}
+            onAction={onAction}
+            onPreview={(node) => {
+              setPreviewId(node.id);
+            }}
+          />
         )}
       </div>
 
@@ -356,6 +366,15 @@ export function FolderView({ folderId }: { folderId: string | null }) {
           }}
           onClose={closeDialog}
           returnFocus={dialog.returnFocus}
+        />
+      ) : null}
+      {previewId ? (
+        <PreviewDialog
+          files={previewSet(children, previewId)}
+          startId={previewId}
+          onClose={() => {
+            setPreviewId(null);
+          }}
         />
       ) : null}
       {pending && conflict && conflictEntry ? (

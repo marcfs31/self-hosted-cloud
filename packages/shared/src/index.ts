@@ -3,3 +3,4 @@ export * from "./errors.js";
 export * from "./files.js";
 export * from "./health.js";
 export * from "./shares.js";
+export * from "./search.js";

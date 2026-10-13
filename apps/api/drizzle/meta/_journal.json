@@ -19,8 +19,15 @@
     {
       "idx": 2,
       "version": "6",
-      "when": 1791852135167,
-      "tag": "0002_shares",
+      "when": 1791851913863,
+      "tag": "0002_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791855001888,
+      "tag": "0003_shares",
       "breakpoints": true
     }
   ]

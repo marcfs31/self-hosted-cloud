@@ -7,7 +7,8 @@ import type {
   UsageResponse,
   VersionListing,
 } from "@cloud/shared";
-import { apiFetch } from "./api";
+import { apiFetch, apiFetchResponse } from "./api";
+import { readTextPreview, TEXT_PREVIEW_BYTES, type TextPreview } from "./preview";
 
 /** Typed calls to the files endpoints. Every failure is an ApiError from apiFetch. */
 
@@ -76,4 +77,27 @@ export function downloadHref(fileId: string): string {
 
 export function versionDownloadHref(fileId: string, versionId: string): string {
   return `/api/files/${id(fileId)}/versions/${id(versionId)}/content?download=1`;
+}
+
+/** The bytes as the browser may show them: the server sends inline only for safe types. */
+export function contentHref(fileId: string): string {
+  return `/api/files/${id(fileId)}/content`;
+}
+
+/**
+ * The first TEXT_PREVIEW_BYTES of a file as text. `size` is the file's size: a server that
+ * honours the Range header sends just that many bytes, so the body alone cannot show that
+ * the file goes on.
+ */
+export async function getTextPreview(
+  fileId: string,
+  size: number,
+  signal?: AbortSignal,
+): Promise<TextPreview> {
+  const response = await apiFetchResponse(`/files/${id(fileId)}/content`, {
+    headers: { range: `bytes=0-${TEXT_PREVIEW_BYTES - 1}` },
+    ...(signal ? { signal } : {}),
+  });
+  const preview = await readTextPreview(response);
+  return { text: preview.text, truncated: preview.truncated || size > TEXT_PREVIEW_BYTES };
 }

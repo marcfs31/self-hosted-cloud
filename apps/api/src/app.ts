@@ -13,6 +13,7 @@ import { UPLOAD_PATH, createUploadService } from "./files/uploads.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
 import { createPublicShares } from "./shares/public.js";
 import { createSharesRouter } from "./shares/routes.js";
+import { createSearchRouter } from "./search/routes.js";
 
 export interface AppOptions {
   config: Config;
@@ -76,6 +77,7 @@ export function createApp({ config, version, db, now = Date.now }: AppOptions): 
   app.use("/api/admin", createAdminRouter({ db, sessions, now }));
   app.use("/api/public/shares", publicShares.router);
   app.use("/api", createSharesRouter({ db, sessions, now }));
+  app.use("/api/search", createSearchRouter({ db, sessions }));
   app.use("/api", createFilesRouter({ db, sessions, config, now }));
   app.use("/api", notFoundHandler);
   app.use(errorHandler);
