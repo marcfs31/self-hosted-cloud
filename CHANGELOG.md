@@ -6,6 +6,54 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-13
+
+### Changed (breaking)
+
+- The API requires `SECRET_KEY` (32 random bytes, base64: `openssl rand -base64 32`) and refuses
+  to start without it. Add it to `/opt/cloud/.env` before upgrading; the first start encrypts
+  existing two-step-verification secrets in place. Keep it out of `/data` backups and in a
+  password manager: losing it means every user's two-step verification has to be reset.
+- Creating an app password or registering a passkey asks for your current password again
+  (and a two-step code when it is on).
+- Caddy reads the TLS certificate from files (`/opt/cloud/tls`, written by the new
+  `cloud-tls.timer` running `tailscale cert`) instead of the tailscaled socket. Run
+  `deploy/scripts/renew-cert.sh` and enable the timer before upgrading (see `deploy/pi-setup.md`).
+- WebDAV evaluates the `If` header in full (RFC 4918 §10.4): a request whose conditions all
+  fail gets 412, also on an unlocked resource; a wrong lock token on a locked resource is now
+  412 instead of 423. Request bodies with an invalid namespace declaration, a duplicate
+  attribute or a control character are refused with 400.
+
+### Added
+
+- Change your password in Settings; it signs out your other devices.
+- "Sign out of other devices" in Settings.
+- A nonce-based Content-Security-Policy and security headers on every page.
+- Each user has their own change-feed sequence; v1 cursors are still accepted.
+- Desktop app icon, and unsigned macOS, Windows and Linux builds from any host and in CI
+  (`.github/workflows/desktop.yml`, on version tags).
+- `deploy/scripts/validate-config.sh` checks the Caddyfile and compose files without a Pi.
+- WebDAV dead properties: PROPPATCH stores client properties (for example Windows file times)
+  atomically and answers 207 per property; PROPFIND returns them; COPY copies them. Limits:
+  100 properties, 16 KiB each, 128 KiB per file. `litmus` 0.13 passes except shared locks.
+
+### Fixed
+
+- PDF previews render in Chromium, including behind Caddy (same-origin framing allowed;
+  pages still refuse being framed through CSP `frame-ancestors 'none'`).
+- Generated unique file names never exceed 255 characters.
+- The web image compiles its native modules during `pnpm fetch`.
+- A WebDAV upload refused before its temp file was open no longer leaves the file behind.
+
+### Security
+
+- Two-step-verification secrets are encrypted at rest (AES-256-GCM).
+- Drop boxes limit upload creations per visitor and per share.
+- Change-feed cursors no longer reveal how much activity other users have.
+- The CLI refuses plain `http://` server URLs except for localhost.
+- Files shared to the app from the phone are forgotten after 24 hours.
+- Activity older than 365 days is deleted in the hourly maintenance.
+
 ## [0.16.0] - 2026-10-13
 
 ### Added
