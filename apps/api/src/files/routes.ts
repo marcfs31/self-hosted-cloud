@@ -14,7 +14,9 @@ import {
   type UsageResponse,
   type VersionListing,
 } from "@cloud/shared";
+import { recordActivity } from "../activity/record.js";
 import { authOf, type SessionService } from "../auth/sessions.js";
+import { recordChanges } from "../changes/record.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { fileVersions, files } from "../db/schema/index.js";
@@ -24,6 +26,7 @@ import { removeBlob } from "./storage.js";
 import { purgeAllTrashed, purgeItem } from "./trash.js";
 import {
   activeSiblingNames,
+  activeSubtree,
   breadcrumbsOf,
   chainOf,
   getNode,
@@ -91,6 +94,7 @@ export function createFilesRouter(opts: {
           updatedAt: at,
         })
         .run();
+      recordChanges(tx, user.id, [id], at.getTime());
       return getNode(tx, id);
     });
     res.status(201).json(node);
@@ -119,6 +123,7 @@ export function createFilesRouter(opts: {
           .set({ name, parentId: targetParentId, updatedAt: new Date(now()) })
           .where(eq(files.id, item.id))
           .run();
+        recordChanges(tx, user.id, [item.id], now());
       }
       return getNode(tx, item.id);
     });
@@ -130,10 +135,22 @@ export function createFilesRouter(opts: {
     db.transaction((tx) => {
       const item = requireActive(tx, user.id, req.params.id);
       if (item.parentId === null) throw new HttpError(409, "invalid_move");
+      // Descendants stay unmarked but become inactive: clients get a delete for each of them.
+      const affected = activeSubtree(tx, item.id);
+      const at = now();
       tx.update(files)
-        .set({ deletedAt: new Date(now()) })
+        .set({ deletedAt: new Date(at) })
         .where(eq(files.id, item.id))
         .run();
+      recordChanges(tx, user.id, affected, at);
+      recordActivity(tx, {
+        userId: user.id,
+        type: "trash",
+        fileId: item.id,
+        detail: { name: item.name, kind: item.kind },
+        ip: req.ip,
+        at,
+      });
     });
     res.status(204).end();
   });
@@ -193,6 +210,7 @@ export function createFilesRouter(opts: {
         .set({ currentVersionId: version.id, updatedAt: new Date(now()) })
         .where(eq(files.id, file.id))
         .run();
+      recordChanges(tx, user.id, [file.id], now());
       return getNode(tx, file.id);
     });
     res.json(node);
@@ -205,6 +223,7 @@ export function createFilesRouter(opts: {
       const row = findVersion(tx, user.id, file.id, req.params.versionId);
       if (row.id === file.currentVersionId) throw new HttpError(409, "version_is_current");
       tx.delete(fileVersions).where(eq(fileVersions.id, row.id)).run();
+      recordChanges(tx, user.id, [file.id], now());
       return row;
     });
     await removeBlob(config.dataDir, version.ownerId, version.id);
@@ -266,10 +285,20 @@ export function createFilesRouter(opts: {
           ? item.parentId
           : getOrCreateRoot(tx, user.id, now()).id;
       const name = uniqueName(item.name, activeSiblingNames(tx, parentId));
+      const at = now();
       tx.update(files)
-        .set({ deletedAt: null, parentId, name, updatedAt: new Date(now()) })
+        .set({ deletedAt: null, parentId, name, updatedAt: new Date(at) })
         .where(eq(files.id, item.id))
         .run();
+      recordChanges(tx, user.id, activeSubtree(tx, item.id), at);
+      recordActivity(tx, {
+        userId: user.id,
+        type: "restore",
+        fileId: item.id,
+        detail: { name, kind: item.kind },
+        ip: req.ip,
+        at,
+      });
       return getNode(tx, item.id);
     });
     res.json(node);
@@ -278,13 +307,13 @@ export function createFilesRouter(opts: {
   router.delete("/trash/:id", async (req, res) => {
     const { user } = authOf(res);
     requireTrashed(db, user.id, req.params.id);
-    await purgeItem(db, config.dataDir, user.id, req.params.id);
+    await purgeItem(db, config.dataDir, user.id, req.params.id, { now, ip: req.ip });
     res.status(204).end();
   });
 
-  router.delete("/trash", async (_req, res) => {
+  router.delete("/trash", async (req, res) => {
     const { user } = authOf(res);
-    await purgeAllTrashed(db, config.dataDir, user.id);
+    await purgeAllTrashed(db, config.dataDir, user.id, { now, ip: req.ip });
     res.status(204).end();
   });
 

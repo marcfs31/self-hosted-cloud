@@ -43,6 +43,20 @@
       "when": 1791855415010,
       "tag": "0005_security",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791856651998,
+      "tag": "0006_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791856652519,
+      "tag": "0007_changes_backfill",
+      "breakpoints": true
     }
   ]
 }
