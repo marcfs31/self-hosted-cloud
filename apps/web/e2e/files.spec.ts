@@ -104,6 +104,7 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
     "Files",
     "Trash",
     "Admin",
+    "System",
   ]);
   await expect(page).toHaveTitle(/^Files · Cloud$/);
   await expectNoViolations();
