@@ -25,6 +25,14 @@ import { collectZipEntries, sendZip } from "./zip.js";
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
 const UNLOCK_MAX_FAILURES = 5;
 
+/**
+ * Drop boxes take uploads from anyone with the link, so creations are bounded, whatever their
+ * size (an empty file is complete at creation and costs a row, a blob and a feed entry):
+ * per visitor address and share, and per share in total.
+ */
+export const DROP_BOX_CREATE_PER_IP = { max: 100, windowMs: 60 * 60 * 1000 } as const;
+export const DROP_BOX_CREATE_PER_SHARE = { max: 1000, windowMs: 24 * 60 * 60 * 1000 } as const;
+
 const folderQuery = z.object({ folderId: z.string().min(1).optional() });
 
 function toPublicNode(node: FileNode): PublicNode {
@@ -58,6 +66,8 @@ export function createPublicShares(opts: {
     windowMs: UNLOCK_WINDOW_MS,
     now,
   });
+  const createPerIp = createRateLimiter({ ...DROP_BOX_CREATE_PER_IP, now });
+  const createPerShare = createRateLimiter({ ...DROP_BOX_CREATE_PER_SHARE, now });
   const router = Router();
 
   // The token is part of every URL here: never leak it through Referer, never cache the answers.
@@ -166,6 +176,15 @@ export function createPublicShares(opts: {
       const resolved = access.resolve(token);
       if (!resolved.share.allowUpload) throw new HttpError(404, "not_found");
       access.requireUnlocked(req, resolved);
+      // Every creation counts, accepted or not: refused ones cost the server work too. Both
+      // limits are checked before either is charged, so a refusal never uses up the other.
+      if (req.method === "POST") {
+        const ipKey = `${req.ip ?? "unknown"}|${resolved.share.id}`;
+        createPerIp.check(ipKey);
+        createPerShare.check(resolved.share.id);
+        createPerIp.begin(ipKey);
+        createPerShare.begin(resolved.share.id);
+      }
       const owner = db.select().from(users).where(eq(users.id, resolved.share.ownerId)).get();
       if (!owner) throw new HttpError(404, "not_found");
       res.setHeader("Referrer-Policy", "no-referrer");

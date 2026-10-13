@@ -8,30 +8,55 @@ import { files } from "../db/schema/index.js";
 import { getOrCreateRoot, nodeSelect, toFileNode, type Tx } from "../files/tree.js";
 import { HttpError } from "../http/errors.js";
 
-// Opaque to clients; versioned so the format can change without ambiguity.
-const cursorSchema = z.strictObject({ v: z.literal(1), s: z.int().min(0) });
+/*
+ * Cursors are opaque to clients and versioned.
+ *   v2 {s}: the position in THIS user's own sequence (changes.owner_seq, 1..n without gaps).
+ *   v1 {s}: what servers before 0.17 issued, the global changes.seq. Still accepted so installed
+ *           sync clients keep their place; it is translated to the user's own sequence, and the
+ *           next page hands back a v2 cursor, so the translation happens once.
+ */
+const cursorSchema = z.discriminatedUnion("v", [
+  z.strictObject({ v: z.literal(1), s: z.int().min(0) }),
+  z.strictObject({ v: z.literal(2), s: z.int().min(0) }),
+]);
+type Cursor = z.infer<typeof cursorSchema>;
 
-function encodeCursor(seq: number): string {
-  return Buffer.from(JSON.stringify({ v: 1, s: seq })).toString("base64url");
+function encodeCursor(ownerSeq: number): string {
+  return Buffer.from(JSON.stringify({ v: 2, s: ownerSeq })).toString("base64url");
 }
 
 /** Strict: anything but a cursor this server issued is rejected, never guessed at. */
-function decodeCursor(raw: string): number {
+function decodeCursor(raw: string): Cursor {
   try {
-    const { s } = cursorSchema.parse(JSON.parse(Buffer.from(raw, "base64url").toString("utf8")));
-    if (encodeCursor(s) === raw) return s;
+    const cursor = cursorSchema.parse(JSON.parse(Buffer.from(raw, "base64url").toString("utf8")));
+    if (Buffer.from(JSON.stringify(cursor)).toString("base64url") === raw) return cursor;
   } catch {
     // falls through to the rejection below
   }
   throw new HttpError(400, "invalid_request");
 }
 
-/** Highest sequence ever issued (it never decreases, unlike MAX(seq) once rows are cascaded away). */
-function issuedUpTo(tx: Tx): number {
-  return (
-    tx.get<{ seq: number } | undefined>(sql`select seq from sqlite_sequence where name = 'changes'`)
-      ?.seq ?? 0
+/**
+ * The owner's sequence position a cursor stands for. A v2 position must not lie beyond what this
+ * user has been issued. A v1 position must be 0 or the global seq of one of THIS user's own rows
+ * (that is all the old server ever handed out), so probing it cannot reveal how far other users'
+ * activity has advanced.
+ */
+function positionOf(tx: Tx, ownerId: string, cursor: Cursor): number {
+  if (cursor.v === 2) {
+    const issued =
+      tx.get<{ n: number | null }>(
+        sql`select max(owner_seq) as n from changes where owner_id = ${ownerId}`,
+      ).n ?? 0;
+    if (cursor.s > issued) throw new HttpError(400, "invalid_request");
+    return cursor.s;
+  }
+  if (cursor.s === 0) return 0;
+  const own = tx.get<{ owner_seq: number } | undefined>(
+    sql`select owner_seq from changes where owner_id = ${ownerId} and seq = ${cursor.s}`,
   );
+  if (!own) throw new HttpError(400, "invalid_request");
+  return own.owner_seq;
 }
 
 /** IDs among `ids` that sit under (or are) a trashed item. */
@@ -59,16 +84,16 @@ export function listChanges(
   query: { cursor?: string | undefined; limit: number },
   nowMs: number,
 ): ChangesPage {
-  const after = query.cursor === undefined ? 0 : decodeCursor(query.cursor);
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor);
   return db.transaction((tx) => {
-    if (after > issuedUpTo(tx)) throw new HttpError(400, "invalid_request");
+    const after = cursor === undefined ? 0 : positionOf(tx, ownerId, cursor);
     // A brand-new account has no root yet; the feed must carry it (clients need its ID).
     getOrCreateRoot(tx, ownerId, nowMs);
 
     // Latest sequence per item, oldest first. Distinct items never share a sequence number.
     const rows = tx.all<{ file_id: string; last_seq: number }>(sql`
-      select file_id, max(seq) as last_seq from changes
-       where owner_id = ${ownerId} and seq > ${after}
+      select file_id, max(owner_seq) as last_seq from changes
+       where owner_id = ${ownerId} and owner_seq > ${after}
        group by file_id order by last_seq asc limit ${query.limit + 1}`);
     const page = rows.slice(0, query.limit);
 
