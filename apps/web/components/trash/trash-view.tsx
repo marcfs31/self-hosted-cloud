@@ -10,13 +10,11 @@ import { FileIcon } from "../files/file-icon";
 import { UsageMeter } from "../usage-meter";
 import { useUsage } from "../usage-provider";
 
-/** The number of days is the API's TRASH_RETENTION_DAYS; the web may import only types from it. */
-const RETENTION_DAYS = 30;
-
 type Items = { status: "loading" } | { status: "error"; code: ErrorCode } | ReadyItems;
 interface ReadyItems {
   status: "ready";
   items: readonly FileNode[];
+  retentionDays: number;
 }
 
 type Confirm =
@@ -36,8 +34,8 @@ export function TrashView() {
 
   const load = useCallback(async () => {
     try {
-      const { items } = await getTrash();
-      setState({ status: "ready", items });
+      const { items, retentionDays } = await getTrash();
+      setState({ status: "ready", items, retentionDays });
     } catch (e) {
       setState({ status: "error", code: errorCodeOf(e) });
     }
@@ -93,7 +91,7 @@ export function TrashView() {
           {t.title}
         </h1>
       </div>
-      <p className="note">{t.retention(RETENTION_DAYS)}</p>
+      <p className="note">{t.retention(state.retentionDays)}</p>
       <UsageMeter />
       <div className="toolbar">
         <button

@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { Router, type Response } from "express";
 import {
   INLINE_MIME_TYPES,
+  TRASH_RETENTION_DAYS,
   createFolderRequest,
   uniqueName,
   updateFileRequest,
@@ -276,7 +277,10 @@ export function createFilesRouter(opts: {
 
   router.get("/trash", (_req, res) => {
     const { user } = authOf(res);
-    const body: TrashListing = { items: trashedNodes(db, user.id) };
+    const body: TrashListing = {
+      items: trashedNodes(db, user.id),
+      retentionDays: TRASH_RETENTION_DAYS,
+    };
     res.json(body);
   });
 

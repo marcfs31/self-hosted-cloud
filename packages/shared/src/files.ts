@@ -138,7 +138,11 @@ export const updateFileRequest = z
   .refine((v) => v.name !== undefined || v.parentId !== undefined);
 export type UpdateFileRequest = z.input<typeof updateFileRequest>;
 
-export const trashListing = z.object({ items: z.array(fileNode) });
+export const trashListing = z.object({
+  items: z.array(fileNode),
+  /** Items trashed longer ago than this are purged automatically (TRASH_RETENTION_DAYS). */
+  retentionDays: z.number().int().positive(),
+});
 export type TrashListing = z.infer<typeof trashListing>;
 
 export const usageResponse = z.object({

@@ -265,7 +265,7 @@ describe("trash", () => {
     expect(existsSync(blobFile(h.dataDir, a.user.id, keepVersion))).toBe(true);
     expect(h.db.select().from(files).where(eq(files.id, inner.id)).all()).toEqual([]);
     expect(h.db.select().from(fileVersions).all()).toHaveLength(1);
-    expect((await a.get("/api/trash")).body).toEqual({ items: [] });
+    expect((await a.get("/api/trash")).body).toEqual({ items: [], retentionDays: 30 });
     expect(usageResponse.parse((await a.get("/api/usage")).body).usedBytes).toBe(4);
   });
 
@@ -522,7 +522,7 @@ describe("ownership: user B never sees user A's items", () => {
     ).toBe(404);
     expect((await a.get(`/api/files/${bFile}/content`)).status).toBe(404);
     expect((await b.root()).children.map((c) => c.name)).toEqual(["b.txt"]);
-    expect((await b.get("/api/trash")).body).toEqual({ items: [] });
+    expect((await b.get("/api/trash")).body).toEqual({ items: [], retentionDays: 30 });
     expect(usageResponse.parse((await b.get("/api/usage")).body).usedBytes).toBe(1);
 
     // A is unaffected by all of that.
