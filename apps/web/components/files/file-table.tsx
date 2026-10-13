@@ -7,7 +7,7 @@ import { useFormat, useT } from "../../lib/i18n/provider";
 import { FileIcon } from "./file-icon";
 import { RowMenu, type MenuItem } from "./row-menu";
 
-export type RowAction = "rename" | "move" | "versions" | "trash";
+export type RowAction = "rename" | "move" | "share" | "versions" | "trash";
 
 interface FileTableProps {
   folderName: string;
@@ -16,7 +16,8 @@ interface FileTableProps {
 }
 
 export function FileTable({ folderName, nodes, onAction }: FileTableProps) {
-  const t = useT().files;
+  const all = useT();
+  const t = all.files;
   const format = useFormat();
 
   function itemsFor(node: FileNode): MenuItem[] {
@@ -34,6 +35,7 @@ export function FileTable({ folderName, nodes, onAction }: FileTableProps) {
           },
       { key: "rename", label: t.rowMenu.rename, onSelect: choose("rename") },
       { key: "move", label: t.rowMenu.move, onSelect: choose("move") },
+      { key: "share", label: all.shares.menuShare, onSelect: choose("share") },
       ...(node.kind === "file"
         ? [{ key: "versions", label: t.rowMenu.versions, onSelect: choose("versions") }]
         : []),

@@ -24,6 +24,11 @@ import * as filesPtPT from "./files/pt-PT";
 import * as filesEs from "./files/es";
 import * as filesCa from "./files/ca";
 import * as filesIt from "./files/it";
+import * as sharesEn from "./shares/en";
+import * as sharesPtPT from "./shares/pt-PT";
+import * as sharesEs from "./shares/es";
+import * as sharesCa from "./shares/ca";
+import * as sharesIt from "./shares/it";
 import * as trashEn from "./trash/en";
 import * as trashPtPT from "./trash/pt-PT";
 import * as trashEs from "./trash/es";
@@ -38,6 +43,7 @@ export interface Messages {
   errors: errorsEn.Errors;
   files: filesEn.Files;
   trash: trashEn.Trash;
+  shares: sharesEn.Shares;
 }
 
 export const MESSAGES: Record<Locale, Messages> = {
@@ -48,6 +54,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEn.en,
     files: filesEn.en,
     trash: trashEn.en,
+    shares: sharesEn.en,
   },
   "pt-PT": {
     common: commonPtPT.ptPT,
@@ -56,6 +63,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsPtPT.ptPT,
     files: filesPtPT.ptPT,
     trash: trashPtPT.ptPT,
+    shares: sharesPtPT.ptPT,
   },
   es: {
     common: commonEs.es,
@@ -64,6 +72,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEs.es,
     files: filesEs.es,
     trash: trashEs.es,
+    shares: sharesEs.es,
   },
   ca: {
     common: commonCa.ca,
@@ -72,6 +81,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsCa.ca,
     files: filesCa.ca,
     trash: trashCa.ca,
+    shares: sharesCa.ca,
   },
   it: {
     common: commonIt.it,
@@ -80,5 +90,6 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsIt.it,
     files: filesIt.it,
     trash: trashIt.it,
+    shares: sharesIt.it,
   },
 };

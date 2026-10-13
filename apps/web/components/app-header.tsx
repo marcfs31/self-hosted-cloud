@@ -52,6 +52,9 @@ export function AppHeader() {
               />
             </li>
             <li>
+              <NavLink href="/shares" label={t.shares.title} current={pathname === "/shares"} />
+            </li>
+            <li>
               <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
             {user.role === "admin" ? (

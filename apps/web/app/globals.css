@@ -719,3 +719,46 @@ td > .badge-expired {
     box-shadow: none;
   }
 }
+
+/* ---- Sharing ----------------------------------------------------------- */
+
+.input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.input-row input {
+  flex: 1 1 12rem;
+  inline-size: auto;
+  min-inline-size: 0;
+}
+
+.plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview {
+  max-inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--radius);
+}
+
+.preview-audio {
+  inline-size: 100%;
+}
+
+.dropbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+  border-color: var(--color-border-strong);
+}

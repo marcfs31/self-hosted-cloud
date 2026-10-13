@@ -25,11 +25,16 @@ import { ConflictDialog } from "./conflict-dialog";
 import { FileTable, type RowAction } from "./file-table";
 import { MoveDialog } from "./move-dialog";
 import { NameDialog } from "./name-dialog";
+import { ShareDialog } from "../shares/share-dialog";
 import { VersionsDialog } from "./versions-dialog";
 
 type DialogState =
   | { kind: "newFolder"; returnFocus: HTMLElement | null }
-  | { kind: "rename" | "move" | "versions"; node: FileNode; returnFocus: HTMLElement | null };
+  | {
+      kind: "rename" | "move" | "share" | "versions";
+      node: FileNode;
+      returnFocus: HTMLElement | null;
+    };
 
 interface PendingUpload {
   parentId: string;
@@ -338,6 +343,9 @@ export function FolderView({ folderId }: { folderId: string | null }) {
           onClose={closeDialog}
           returnFocus={dialog.returnFocus}
         />
+      ) : null}
+      {dialog?.kind === "share" ? (
+        <ShareDialog node={dialog.node} onClose={closeDialog} returnFocus={dialog.returnFocus} />
       ) : null}
       {dialog?.kind === "versions" ? (
         <VersionsDialog
