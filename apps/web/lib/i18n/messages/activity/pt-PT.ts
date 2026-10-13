@@ -28,6 +28,7 @@ export const ptPT: Activity = {
     totp_enabled: "Verificação em dois passos ativada",
     totp_disabled: "Verificação em dois passos desativada",
     mfa_reset_by_admin: "Verificação em dois passos reposta por um administrador",
+    password_changed: "Palavra-passe alterada",
     app_password_created: "Palavra-passe de aplicação criada",
     app_password_revoked: "Palavra-passe de aplicação revogada",
     upload: "Ficheiro carregado",
