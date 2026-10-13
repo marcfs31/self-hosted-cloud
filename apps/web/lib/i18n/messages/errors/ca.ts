@@ -12,6 +12,10 @@ export const ca: Errors = {
   invite_invalid: "Aquest enllaç d'invitació ja no és vàlid. Demana'n un de nou a l'administració.",
   email_taken: "Ja existeix un compte amb aquest correu electrònic.",
   cannot_change_self: "No pots canviar el teu propi compte des d'aquí.",
+  name_conflict: "Ja hi ha un element amb aquest nom aquí. Tria un altre nom.",
+  invalid_move: "Aquest element no es pot moure ni canviar d'aquesta manera.",
+  quota_exceeded: "No queda prou espai al teu emmagatzematge per a això.",
+  version_is_current: "Aquesta és la versió actual. Restaura primer una altra versió.",
   internal:
     "Alguna cosa ha anat malament per la nostra banda. Torna-ho a provar d'aquí a un moment.",
 };

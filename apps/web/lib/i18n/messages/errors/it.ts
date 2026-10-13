@@ -13,5 +13,9 @@ export const it: Errors = {
     "Questo link d'invito non è più valido. Chiedine uno nuovo a chi amministra il cloud.",
   email_taken: "Esiste già un account con questa email.",
   cannot_change_self: "Non puoi modificare il tuo stesso account da qui.",
+  name_conflict: "Qui c'è già un elemento con questo nome. Scegli un altro nome.",
+  invalid_move: "Questo elemento non può essere spostato o modificato in questo modo.",
+  quota_exceeded: "Non c'è abbastanza spazio libero nel tuo archivio per questo.",
+  version_is_current: "Questa è la versione attuale. Ripristina prima un'altra versione.",
   internal: "Qualcosa è andato storto da parte nostra. Riprova tra un attimo.",
 };

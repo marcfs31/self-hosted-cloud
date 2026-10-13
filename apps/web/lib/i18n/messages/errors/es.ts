@@ -13,5 +13,9 @@ export const es: Errors = {
     "Este enlace de invitación ya no es válido. Pide uno nuevo a quien administra la nube.",
   email_taken: "Ya existe una cuenta con ese correo electrónico.",
   cannot_change_self: "No puedes cambiar tu propia cuenta desde aquí.",
+  name_conflict: "Ya hay un elemento con ese nombre aquí. Elige otro nombre.",
+  invalid_move: "Ese elemento no se puede mover ni cambiar de esta forma.",
+  quota_exceeded: "No queda espacio suficiente en tu almacenamiento para esto.",
+  version_is_current: "Esta es la versión actual. Restaura otra versión primero.",
   internal: "Algo ha salido mal por nuestra parte. Inténtalo de nuevo en un momento.",
 };

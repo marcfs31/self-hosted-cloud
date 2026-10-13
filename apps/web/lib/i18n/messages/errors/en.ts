@@ -13,6 +13,10 @@ export const en: Record<ErrorCode, string> = {
   invite_invalid: "This invite link isn't valid any more. Ask the admin for a new one.",
   email_taken: "An account with that email already exists.",
   cannot_change_self: "You can't change your own account here.",
+  name_conflict: "Something with that name is already here. Choose another name.",
+  invalid_move: "That item can't be moved or changed this way.",
+  quota_exceeded: "There isn't enough space left in your storage for this.",
+  version_is_current: "This is the current version. Restore another version first.",
   internal: "Something went wrong on our side. Please try again in a moment.",
 };
 

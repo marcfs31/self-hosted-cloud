@@ -12,5 +12,9 @@ export const ptPT: Errors = {
   invite_invalid: "Esta ligação de convite já não é válida. Peça uma nova à administração.",
   email_taken: "Já existe uma conta com esse e-mail.",
   cannot_change_self: "Não pode alterar a sua própria conta aqui.",
+  name_conflict: "Já existe um item com esse nome aqui. Escolha outro nome.",
+  invalid_move: "Esse item não pode ser movido ou alterado desta forma.",
+  quota_exceeded: "Não há espaço suficiente no seu armazenamento para isto.",
+  version_is_current: "Esta é a versão atual. Restaure outra versão primeiro.",
   internal: "Algo correu mal do nosso lado. Tente novamente dentro de instantes.",
 };
