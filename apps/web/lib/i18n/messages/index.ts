@@ -29,6 +29,16 @@ import * as trashPtPT from "./trash/pt-PT";
 import * as trashEs from "./trash/es";
 import * as trashCa from "./trash/ca";
 import * as trashIt from "./trash/it";
+import * as securityEn from "./security/en";
+import * as securityPtPT from "./security/pt-PT";
+import * as securityEs from "./security/es";
+import * as securityCa from "./security/ca";
+import * as securityIt from "./security/it";
+import * as activityEn from "./activity/en";
+import * as activityPtPT from "./activity/pt-PT";
+import * as activityEs from "./activity/es";
+import * as activityCa from "./activity/ca";
+import * as activityIt from "./activity/it";
 
 /** One entry per namespace. A new namespace adds a key here and one line per locale below. */
 export interface Messages {
@@ -38,6 +48,8 @@ export interface Messages {
   errors: errorsEn.Errors;
   files: filesEn.Files;
   trash: trashEn.Trash;
+  security: securityEn.Security;
+  activity: activityEn.Activity;
 }
 
 export const MESSAGES: Record<Locale, Messages> = {
@@ -48,6 +60,8 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEn.en,
     files: filesEn.en,
     trash: trashEn.en,
+    security: securityEn.en,
+    activity: activityEn.en,
   },
   "pt-PT": {
     common: commonPtPT.ptPT,
@@ -56,6 +70,8 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsPtPT.ptPT,
     files: filesPtPT.ptPT,
     trash: trashPtPT.ptPT,
+    security: securityPtPT.ptPT,
+    activity: activityPtPT.ptPT,
   },
   es: {
     common: commonEs.es,
@@ -64,6 +80,8 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEs.es,
     files: filesEs.es,
     trash: trashEs.es,
+    security: securityEs.es,
+    activity: activityEs.es,
   },
   ca: {
     common: commonCa.ca,
@@ -72,6 +90,8 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsCa.ca,
     files: filesCa.ca,
     trash: trashCa.ca,
+    security: securityCa.ca,
+    activity: activityCa.ca,
   },
   it: {
     common: commonIt.it,
@@ -80,5 +100,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsIt.it,
     files: filesIt.it,
     trash: trashIt.it,
+    security: securityIt.it,
+    activity: activityIt.it,
   },
 };

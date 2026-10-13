@@ -14,6 +14,12 @@ const SAME_AS_ENGLISH: Record<string, readonly Locale[]> = {
   "admin.users.quota": ["pt-PT", "ca", "it"],
   "files.table.versions": ["ca"],
   "files.versions.listLabel": ["ca"],
+  "security.totp.passwordLabel": ["it"],
+  "activity.colAccount": ["it"],
+  "activity.methods.password": ["it"],
+  "activity.methods.passkey": ["it"],
+  "activity.detail.file": ["it"],
+  "activity.detail.passkey": ["it"],
 };
 
 const SAMPLE_ARGS = ["alice@example.test", "Admin", "13 Oct 2026"];
