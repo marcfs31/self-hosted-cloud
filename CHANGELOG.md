@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-13
+
+### Added
+
+- Desktop sync app (Electron, macOS/Windows/Linux): keeps a local folder in two-way sync from
+  the tray, with pause/resume and status, in all five languages.
+- Conflicts never lose an edit: both copies are kept as `name (conflicted copy <device> <date>)`;
+  an edit always wins over a delete; files removed by sync go to the system trash.
+- Credentials are stored encrypted by the operating system's keychain (app passwords only).
+- Unsigned builds via `pnpm --filter @cloud/desktop package`.
+
 ## [0.14.0] - 2026-10-13
 
 ### Added
