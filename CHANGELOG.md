@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-13
+
+### Added
+
+- Admin system dashboard: CPU temperature and load, memory, storage, and the results of the
+  last backup, restore test and health check; anything missing or out of date shows as
+  Unknown or Stale, never as healthy.
+- `backup-db` command for a consistent online copy of the database while the cloud runs.
+- Nightly restic backups to one or more repositories, a monthly automated restore test and a
+  15-minute health check (including disk SMART status), as systemd timers.
+- Operations runbook: updates, rollback, backups, disaster recovery and migration policy.
+
 ## [0.9.0] - 2026-10-13
 
 ### Added
