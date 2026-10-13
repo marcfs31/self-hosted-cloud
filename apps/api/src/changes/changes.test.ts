@@ -15,7 +15,7 @@ import {
 } from "@cloud/shared";
 import { changes, files } from "../db/schema/index.js";
 import { purgeExpiredTrash } from "../files/trash.js";
-import { harness, type Harness } from "../testing/harness.js";
+import { PASSWORD, harness, type Harness } from "../testing/harness.js";
 import { createLink, visitor } from "../testing/shares.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -368,7 +368,7 @@ describe("change feed: reading", () => {
   it("an app password (Bearer) can read the feed", async () => {
     const { h, a, root } = await setup();
     const dir = await a.mkdir(root.id, "Docs");
-    const created = await a.post("/api/auth/app-passwords", { name: "cli" });
+    const created = await a.post("/api/auth/app-passwords", { name: "cli", password: PASSWORD });
     expect(created.status).toBe(201);
     const { token } = createdAppPasswordResponse.parse(created.body);
 

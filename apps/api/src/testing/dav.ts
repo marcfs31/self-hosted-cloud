@@ -2,7 +2,7 @@ import request from "supertest";
 import { expect } from "vitest";
 import { createdAppPasswordResponse } from "@cloud/shared";
 import { parseXml, type XmlElement } from "../dav/xml.js";
-import { binary, harness, type Harness } from "./harness.js";
+import { PASSWORD, binary, harness, type Harness } from "./harness.js";
 
 type Verb = (url: string) => request.Test;
 type Session = Awaited<ReturnType<Harness["admin"]>>;
@@ -71,7 +71,7 @@ export type DavClient = ReturnType<typeof davClient>;
 
 /** Creates an app password for the session's user and returns a client that uses it. */
 export async function davFor(h: Harness, s: Session): Promise<DavClient & { secret: string }> {
-  const res = await s.post("/api/auth/app-passwords", { name: "webdav" });
+  const res = await s.post("/api/auth/app-passwords", { name: "webdav", password: PASSWORD });
   expect(res.status).toBe(201);
   const { token } = createdAppPasswordResponse.parse(res.body);
   return { ...davClient(h, s.email, token), secret: token };

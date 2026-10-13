@@ -11,11 +11,18 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { meResponse, passkeyList, passkey as passkeySchema } from "@cloud/shared";
+import {
+  meResponse,
+  passkeyList,
+  passkey as passkeySchema,
+  totpSetupResponse,
+} from "@cloud/shared";
 import { createApp } from "../app.js";
 import type { Config } from "../config.js";
+import { TEST_SECRET_KEY } from "../testing/secret-key.js";
 import { openDatabase } from "../db/client.js";
 import { activity, passkeys, sessions } from "../db/schema/index.js";
+import { totpAt } from "./totp.js";
 
 const ORIGIN = "https://cloud.example.com";
 const PASSWORD = "correct horse battery";
@@ -28,6 +35,7 @@ function harness() {
     port: 0,
     dataDir: mkdtempSync(join(tmpdir(), "cloud-passkeys-")),
     publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
   };
   const app = createApp({ config, version: "0.0.0", db, now: () => clock.t });
   const post = (path: string, body: object = {}, cookie?: string) => {
@@ -187,11 +195,92 @@ async function addPasskey(h: Harness, sid: string, name: string, device: Softwar
   const { options, wa } = await registrationOptions(h, sid);
   const res = await h.post(
     "/api/auth/passkeys/register/verify",
-    { name, response: device.register(options.challenge) },
+    { name, password: PASSWORD, response: device.register(options.challenge) },
     `${sid}; ${wa}`,
   );
   return res;
 }
+
+describe("passkey registration: step-up re-authentication", () => {
+  async function verifyWith(h: Harness, sid: string, extra: object, device: SoftwareAuthenticator) {
+    const { options, wa } = await registrationOptions(h, sid);
+    return h.post(
+      "/api/auth/passkeys/register/verify",
+      { name: "Laptop", response: device.register(options.challenge), ...extra },
+      `${sid}; ${wa}`,
+    );
+  }
+
+  it("refuses a request without the password, with a wrong one, and stores nothing", async () => {
+    const h = harness();
+    const sid = await setupAdmin(h);
+    const device = new SoftwareAuthenticator("cloud.example.com");
+    const missing = await verifyWith(h, sid, {}, device);
+    expect(missing.status).toBe(400);
+    expect(missing.body).toEqual({ error: { code: "invalid_request" } });
+    const wrong = await verifyWith(h, sid, { password: "not the password" }, device);
+    expect(wrong.status).toBe(401);
+    expect(wrong.body).toEqual({ error: { code: "invalid_credentials" } });
+    expect(h.db.select().from(passkeys).all()).toHaveLength(0);
+    expect((await verifyWith(h, sid, { password: PASSWORD }, device)).status).toBe(201);
+  });
+
+  it("does not spend the challenge on a wrong password: the same ceremony can be retried", async () => {
+    const h = harness();
+    const sid = await setupAdmin(h);
+    const device = new SoftwareAuthenticator("cloud.example.com");
+    const { options, wa } = await registrationOptions(h, sid);
+    const body = (password: string) => ({
+      name: "Laptop",
+      password,
+      response: device.register(options.challenge),
+    });
+    const cookie = `${sid}; ${wa}`;
+    expect((await h.post("/api/auth/passkeys/register/verify", body("nope"), cookie)).status).toBe(
+      401,
+    );
+    expect(
+      (await h.post("/api/auth/passkeys/register/verify", body(PASSWORD), cookie)).status,
+    ).toBe(201);
+  });
+
+  it("also needs a current authenticator code when two-step verification is on", async () => {
+    const h = harness();
+    const sid = await setupAdmin(h);
+    const setup = totpSetupResponse.parse((await h.post("/api/auth/totp/setup", {}, sid)).body);
+    const enable = await h.post(
+      "/api/auth/totp/enable",
+      { code: totpAt(setup.secret, h.clock.t) },
+      sid,
+    );
+    expect(enable.status).toBe(200);
+    h.clock.t += 30_000;
+    const device = new SoftwareAuthenticator("cloud.example.com");
+
+    const noCode = await verifyWith(h, sid, { password: PASSWORD }, device);
+    expect(noCode.status).toBe(401);
+    expect(noCode.body).toEqual({ error: { code: "invalid_code" } });
+    const wrongCode = await verifyWith(h, sid, { password: PASSWORD, code: "000000" }, device);
+    expect(wrongCode.status).toBe(401);
+    expect(wrongCode.body).toEqual({ error: { code: "invalid_code" } });
+    expect(h.db.select().from(passkeys).all()).toHaveLength(0);
+
+    const code = totpAt(setup.secret, h.clock.t);
+    expect((await verifyWith(h, sid, { password: PASSWORD, code }, device)).status).toBe(201);
+  });
+
+  it("limits wrong passwords to 5 and then answers 429, even for the right one", async () => {
+    const h = harness();
+    const sid = await setupAdmin(h);
+    const device = new SoftwareAuthenticator("cloud.example.com");
+    for (let i = 0; i < 5; i++) {
+      expect((await verifyWith(h, sid, { password: "nope" }, device)).status).toBe(401);
+    }
+    const blocked = await verifyWith(h, sid, { password: PASSWORD }, device);
+    expect(blocked.status).toBe(429);
+    expect(blocked.body).toEqual({ error: { code: "too_many_attempts" } });
+  });
+});
 
 describe("passkey registration", () => {
   it("issues creation options for the RP, excluding existing credentials, with a hardened cookie", async () => {
@@ -274,7 +363,7 @@ describe("passkey registration", () => {
     const { options, wa } = await registrationOptions(h, sid);
     const cookie = `${sid}; ${wa}`;
     const verify = (response: object, c = cookie) =>
-      h.post("/api/auth/passkeys/register/verify", { name: "x", response }, c);
+      h.post("/api/auth/passkeys/register/verify", { name: "x", password: PASSWORD, response }, c);
 
     // Wrong origin inside the signed client data.
     const evil = await verify(device.register(options.challenge, "https://evil.example"));
@@ -307,7 +396,7 @@ describe("passkey registration", () => {
     h.clock.t += 5 * 60 * 1000 + 1;
     const res = await h.post(
       "/api/auth/passkeys/register/verify",
-      { name: "x", response: device.register(options.challenge) },
+      { name: "x", password: PASSWORD, response: device.register(options.challenge) },
       `${sid}; ${wa}`,
     );
     expect(res.status).toBe(400);
@@ -321,7 +410,7 @@ describe("passkey registration", () => {
     const loginOptions = login.body as Options;
     const res = await h.post(
       "/api/auth/passkeys/register/verify",
-      { name: "x", response: device.register(loginOptions.challenge) },
+      { name: "x", password: PASSWORD, response: device.register(loginOptions.challenge) },
       `${sid}; ${cookieValue(login, "wa")}`,
     );
     expect(res.status).toBe(400);

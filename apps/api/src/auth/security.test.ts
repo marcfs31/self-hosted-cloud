@@ -18,6 +18,7 @@ import {
 import { recordActivity } from "../activity/record.js";
 import { createApp } from "../app.js";
 import type { Config } from "../config.js";
+import { TEST_SECRET_KEY } from "../testing/secret-key.js";
 import { openDatabase } from "../db/client.js";
 import {
   activity,
@@ -27,6 +28,7 @@ import {
   totp,
   users,
 } from "../db/schema/index.js";
+import { sealLegacyTotpSecrets } from "./secret-box.js";
 import { hashToken } from "./tokens.js";
 import { totpAt } from "./totp.js";
 
@@ -42,6 +44,7 @@ function harness() {
     port: 0,
     dataDir: mkdtempSync(join(tmpdir(), "cloud-security-")),
     publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
   };
   const app = createApp({ config, version: "0.0.0", db, now: () => clock.t });
   type Auth = { cookie?: string; bearer?: string };
@@ -236,6 +239,7 @@ describe("login with a second factor", () => {
       "/api/auth/app-passwords",
       "/api/auth/totp/setup",
       "/api/auth/passkeys/register/options",
+      "/api/auth/password",
     ]) {
       const res = await h.post(path, { name: "x" }, auth);
       expect(res.status, path).toBe(401);
@@ -561,7 +565,7 @@ describe("session revocation", () => {
 
 describe("app passwords", () => {
   async function withToken(h: Harness, cookie: string, name = "laptop") {
-    const res = await h.post("/api/auth/app-passwords", { name }, { cookie });
+    const res = await h.post("/api/auth/app-passwords", { name, password: PASSWORD }, { cookie });
     expect(res.status).toBe(201);
     return createdAppPasswordResponse.parse(res.body);
   }
@@ -727,7 +731,11 @@ describe("activity log", () => {
     });
     const cookie = sidCookie(login);
     tick();
-    const created = await h.post("/api/auth/app-passwords", { name: "cli" }, { cookie });
+    const created = await h.post(
+      "/api/auth/app-passwords",
+      { name: "cli", password: PASSWORD },
+      { cookie },
+    );
     const parsed = createdAppPasswordResponse.parse(created.body);
     tick();
     await h.del(`/api/auth/app-passwords/${parsed.appPassword.id}`, { cookie });
@@ -910,5 +918,245 @@ describe("activity log", () => {
     recordActivity(h.db, { userId: user.id, type: "upload", fileId: "gone" });
     h.db.delete(users).where(eq(users.id, user.id)).run();
     expect(h.db.select().from(activity).all()).toHaveLength(0);
+  });
+});
+
+describe("app passwords: step-up re-authentication", () => {
+  const create = (h: Harness, cookie: string, extra: object = {}) =>
+    h.post("/api/auth/app-passwords", { name: "laptop", ...extra }, { cookie });
+  const rows = (h: Harness) => h.db.select().from(appPasswords).all();
+
+  it("refuses a request without the password, with a wrong one, and creates nothing", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    const missing = await create(h, cookie);
+    expect(missing.status).toBe(400);
+    expect(missing.body).toEqual({ error: { code: "invalid_request" } });
+    const wrong = await create(h, cookie, { password: "not the password" });
+    expect(wrong.status).toBe(401);
+    expect(wrong.body).toEqual({ error: { code: "invalid_credentials" } });
+    expect(rows(h)).toHaveLength(0);
+    expect(h.db.select().from(activity).all()).toHaveLength(0);
+
+    const ok = await create(h, cookie, { password: PASSWORD });
+    expect(ok.status).toBe(201);
+    expect(rows(h)).toHaveLength(1);
+  });
+
+  it("with two-step verification on, also needs a current code (or a recovery code)", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    const factor = await enableTotp(h, cookie);
+    h.clock.t += STEP_MS;
+
+    const noCode = await create(h, cookie, { password: PASSWORD });
+    expect(noCode.status).toBe(401);
+    expect(noCode.body).toEqual({ error: { code: "invalid_code" } });
+    const wrongCode = await create(h, cookie, { password: PASSWORD, code: "000000" });
+    expect(wrongCode.status).toBe(401);
+    expect(wrongCode.body).toEqual({ error: { code: "invalid_code" } });
+    // A right code with the wrong password is still a password failure.
+    const wrongPassword = await create(h, cookie, {
+      password: "nope",
+      code: totpAt(factor.secret, h.clock.t),
+    });
+    expect(wrongPassword.body).toEqual({ error: { code: "invalid_credentials" } });
+    expect(rows(h)).toHaveLength(0);
+
+    const code = totpAt(factor.secret, h.clock.t);
+    expect((await create(h, cookie, { password: PASSWORD, code })).status).toBe(201);
+    // The step is spent: the same code cannot authorise a second credential.
+    const replay = await create(h, cookie, { password: PASSWORD, code });
+    expect(replay.status).toBe(401);
+    expect(replay.body).toEqual({ error: { code: "invalid_code" } });
+
+    const recovery = factor.recoveryCodes[0] ?? "";
+    expect((await create(h, cookie, { password: PASSWORD, code: recovery })).status).toBe(201);
+    expect(rows(h)).toHaveLength(2);
+  });
+
+  it("limits wrong passwords to 5 per 15 minutes, then answers 429 even for the right one", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    for (let i = 0; i < 5; i++) {
+      expect((await create(h, cookie, { password: "nope" })).status).toBe(401);
+    }
+    const blocked = await create(h, cookie, { password: PASSWORD });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body).toEqual({ error: { code: "too_many_attempts" } });
+    expect(rows(h)).toHaveLength(0);
+
+    h.clock.t += 16 * 60 * 1000;
+    expect((await create(h, cookie, { password: PASSWORD })).status).toBe(201);
+  });
+
+  it("counts parallel guesses before the password check finishes: at most 5 get a 401", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    const burst = await Promise.all(
+      Array.from({ length: 20 }, () => create(h, cookie, { password: "nope" })),
+    );
+    const statuses = burst.map((res) => res.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(15);
+  });
+
+  it("does not count right passwords against the limit", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    for (let i = 0; i < 12; i++) {
+      expect((await create(h, cookie, { password: PASSWORD })).status).toBe(201);
+    }
+  });
+});
+
+describe("password change", () => {
+  const NEW_PASSWORD = "a brand new passphrase";
+  const change = (h: Harness, cookie: string, body: object) =>
+    h.post("/api/auth/password", body, { cookie });
+  const secondSession = async (h: Harness, email = "admin@example.com", password = PASSWORD) => {
+    const res = await h.post("/api/auth/login", { email, password });
+    return { status: res.status, cookie: res.status === 200 ? sidCookie(res) : "" };
+  };
+
+  it("answers 204, switches the password, ends the other sessions, keeps the caller's, logs it", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const other = await secondSession(h);
+    expect(other.status).toBe(200);
+
+    h.clock.t += 1000;
+    const res = await change(h, admin.cookie, {
+      currentPassword: PASSWORD,
+      newPassword: NEW_PASSWORD,
+    });
+    expect(res.status).toBe(204);
+    expect((await h.get("/api/auth/me", { cookie: other.cookie })).status).toBe(401);
+    expect((await h.get("/api/auth/me", { cookie: admin.cookie })).status).toBe(200);
+    expect((await secondSession(h, "admin@example.com", PASSWORD)).status).toBe(401);
+    expect((await secondSession(h, "admin@example.com", NEW_PASSWORD)).status).toBe(200);
+
+    const types = (await feed(h, "/api/activity", { cookie: admin.cookie })).events.map(
+      (e) => e.type,
+    );
+    expect(types).toContain("password_changed");
+    const admins = await feed(h, "/api/admin/activity", { cookie: admin.cookie });
+    expect(admins.events.some((e) => e.type === "password_changed")).toBe(true);
+    // Neither password is ever written to the log.
+    const logged = JSON.stringify(h.db.select().from(activity).all());
+    expect(logged).not.toContain(PASSWORD);
+    expect(logged).not.toContain(NEW_PASSWORD);
+  });
+
+  it("refuses a wrong current password and changes nothing", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const other = await secondSession(h);
+    const res = await change(h, admin.cookie, {
+      currentPassword: "not it",
+      newPassword: NEW_PASSWORD,
+    });
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: { code: "invalid_credentials" } });
+    expect((await h.get("/api/auth/me", { cookie: other.cookie })).status).toBe(200);
+    expect((await secondSession(h, "admin@example.com", PASSWORD)).status).toBe(200);
+    expect(
+      h.db
+        .select()
+        .from(activity)
+        .all()
+        .map((r) => r.type),
+    ).not.toContain("password_changed");
+  });
+
+  it("applies the new-password rules and needs a session", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const short = await change(h, admin.cookie, {
+      currentPassword: PASSWORD,
+      newPassword: "short",
+    });
+    expect(short.status).toBe(400);
+    expect(short.body).toEqual({ error: { code: "invalid_request" } });
+    expect((await change(h, admin.cookie, { newPassword: NEW_PASSWORD })).status).toBe(400);
+    const anonymous = await h.post("/api/auth/password", {
+      currentPassword: PASSWORD,
+      newPassword: NEW_PASSWORD,
+    });
+    expect(anonymous.status).toBe(401);
+  });
+
+  it("shares the step-up limiter: 5 wrong passwords, then 429 even for the right one", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    for (let i = 0; i < 5; i++) {
+      const res = await change(h, admin.cookie, {
+        currentPassword: "nope",
+        newPassword: NEW_PASSWORD,
+      });
+      expect(res.status).toBe(401);
+    }
+    const blocked = await change(h, admin.cookie, {
+      currentPassword: PASSWORD,
+      newPassword: NEW_PASSWORD,
+    });
+    expect(blocked.status).toBe(429);
+    expect((await secondSession(h, "admin@example.com", PASSWORD)).status).toBe(200);
+  });
+
+  it("cannot be reached with an app password", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const created = createdAppPasswordResponse.parse(
+      (
+        await h.post(
+          "/api/auth/app-passwords",
+          { name: "cli", password: PASSWORD },
+          { cookie: admin.cookie },
+        )
+      ).body,
+    );
+    const res = await h.post(
+      "/api/auth/password",
+      { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+      { bearer: created.token },
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("TOTP secrets at rest", () => {
+  it("stores a sealed secret, never the base32 seed, and codes still verify", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    const { secret } = await enableTotp(h, cookie);
+    const stored = h.db.select().from(totp).get()?.secret ?? "";
+    expect(stored).toMatch(/^v1:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/);
+    expect(stored).not.toContain(secret);
+    expect(await loginPending(h)).toMatch(/^sid=/);
+  });
+
+  it("seals a legacy plaintext secret on startup, once, and the user keeps working", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    const { secret } = await enableTotp(h, cookie);
+    // The state of a database written before SECRET_KEY existed.
+    h.db.update(totp).set({ secret }).run();
+
+    expect(sealLegacyTotpSecrets(h.db, TEST_SECRET_KEY)).toBe(1);
+    const sealed = h.db.select().from(totp).get()?.secret ?? "";
+    expect(sealed.startsWith("v1:")).toBe(true);
+    expect(sealed).not.toContain(secret);
+    expect(sealLegacyTotpSecrets(h.db, TEST_SECRET_KEY)).toBe(0);
+    expect(h.db.select().from(totp).get()?.secret).toBe(sealed);
+
+    h.clock.t += STEP_MS;
+    const pending = await loginPending(h);
+    const full = await h.post(
+      "/api/auth/login/totp",
+      { code: totpAt(secret, h.clock.t) },
+      { cookie: pending },
+    );
+    expect(full.status).toBe(200);
   });
 });

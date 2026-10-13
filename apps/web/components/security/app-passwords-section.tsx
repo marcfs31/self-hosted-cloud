@@ -192,8 +192,8 @@ export function AppPasswordsSection() {
           requiredMessage={t.nameRequired}
           submitLabel={t.createSubmit}
           submittingLabel={t.creating}
-          onSubmit={async (name) => {
-            const body: CreateAppPasswordRequest = { name };
+          onSubmit={async (name, stepUp) => {
+            const body: CreateAppPasswordRequest = { name, ...stepUp };
             const created = await apiFetch<CreatedAppPasswordResponse>("/auth/app-passwords", {
               method: "POST",
               json: body,

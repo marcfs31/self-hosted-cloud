@@ -24,6 +24,7 @@ import { HttpError } from "../http/errors.js";
 import { CHALLENGE_TTL_MS, createChallengeStore, type ChallengePurpose } from "./challenges.js";
 import { createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
 import { authOf, toUser, type SessionService } from "./sessions.js";
+import type { StepUp } from "./step-up.js";
 
 const RP_NAME = "Cloud";
 const CHALLENGE_COOKIE = "wa";
@@ -51,9 +52,10 @@ export function createPasskeyRouter(opts: {
   db: Db;
   config: Config;
   sessions: SessionService;
+  stepUp: StepUp;
   now: () => number;
 }): Router {
-  const { db, config, sessions: sessionService, now } = opts;
+  const { db, config, sessions: sessionService, stepUp, now } = opts;
   const rpID = new URL(config.publicOrigin).hostname;
   const expectedOrigin = config.publicOrigin;
   const challenges = createChallengeStore(now);
@@ -109,8 +111,9 @@ export function createPasskeyRouter(opts: {
   });
 
   router.post("/register/verify", sessionService.requireUser, async (req, res) => {
-    const { name, response } = registerPasskeyRequest.parse(req.body);
+    const { name, response, password, code } = registerPasskeyRequest.parse(req.body);
     const { id: userId } = authOf(res).user;
+    await stepUp.verify(userId, req.ip, { password, code });
     const expectedChallenge = consume(req, res, "register", userId);
     if (!expectedChallenge) throw new HttpError(400, "invalid_request");
     let verified;

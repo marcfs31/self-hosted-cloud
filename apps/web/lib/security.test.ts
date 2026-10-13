@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactCode, groupSecret, recoveryFileText } from "./security";
+import { compactCode, groupSecret, recoveryFileText, stepUpFields } from "./security";
 
 describe("groupSecret", () => {
   it("groups the key in fours", () => {
@@ -30,5 +30,19 @@ describe("recoveryFileText", () => {
     expect(recoveryFileText("Codes", ["aaaaa-bbbbb", "ccccc-ddddd"])).toBe(
       "Codes\n\naaaaa-bbbbb\nccccc-ddddd\n",
     );
+  });
+});
+
+describe("stepUpFields", () => {
+  it("sends only the password when the account has no second factor", () => {
+    expect(stepUpFields("pw", "123456", false)).toEqual({ password: "pw" });
+  });
+
+  it("adds the code, without spaces, when two-step verification is on", () => {
+    expect(stepUpFields("pw", " 123 456 ", true)).toEqual({ password: "pw", code: "123456" });
+  });
+
+  it("keeps the password exactly as typed", () => {
+    expect(stepUpFields("  pw with spaces ", "", false).password).toBe("  pw with spaces ");
   });
 });
