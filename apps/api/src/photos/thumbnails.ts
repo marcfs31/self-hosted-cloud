@@ -12,6 +12,14 @@ const FFMPEG_MAX_BYTES = 64 * 1024 * 1024;
 /** One frame, in the container's own orientation; -ss before -i seeks without decoding. */
 const FRAME_ARGS = ["-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"];
 
+/** What sharp may decode at all; its own default (268 MP) is 1 GB of pixels per job. */
+const MAX_INPUT_PIXELS = 100_000_000;
+/**
+ * Interlaced PNG and progressive JPEG cannot be resized while streaming: libvips holds the
+ * whole decoded image (a 3 MB 16-bit PNG took 2.5 GB). Above this raw size, no thumbnail.
+ */
+const MAX_WHOLE_IMAGE_BYTES = 256 * 1024 * 1024;
+
 /** The thumbnail cannot be made: not decodable, no ffmpeg, timed out. The route answers 404. */
 export class ThumbnailUnavailable extends Error {
   constructor(reason: string) {
@@ -47,10 +55,29 @@ async function videoFrame(ffmpeg: string | null, source: string): Promise<Buffer
   }
 }
 
+/** Reads the header only, and refuses an image whose decode would not fit the memory budget. */
+async function assertWithinBudget(input: string | Buffer): Promise<void> {
+  let meta;
+  try {
+    meta = await sharp(input).metadata();
+  } catch {
+    throw new ThumbnailUnavailable("decode_failed");
+  }
+  const { width, height, channels, depth, isProgressive } = meta;
+  if (!width || !height) throw new ThumbnailUnavailable("decode_failed");
+  if (width * height > MAX_INPUT_PIXELS) throw new ThumbnailUnavailable("image_too_large");
+  const bytesPerSample = depth === "ushort" || depth === "short" ? 2 : depth === "float" ? 4 : 1;
+  const raw = width * height * channels * bytesPerSample;
+  if (isProgressive && raw > MAX_WHOLE_IMAGE_BYTES) {
+    throw new ThumbnailUnavailable("image_too_large");
+  }
+}
+
 async function render(source: string, size: ThumbnailSize, video: boolean, tools: MediaTools) {
   const input = video ? await videoFrame(tools.ffmpeg, source) : source;
+  await assertWithinBudget(input);
   try {
-    return await sharp(input, { sequentialRead: true })
+    return await sharp(input, { sequentialRead: true, limitInputPixels: MAX_INPUT_PIXELS })
       .rotate()
       .resize({ width: size, height: size, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })

@@ -1,12 +1,24 @@
-import { existsSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { errorResponse } from "@cloud/shared";
 import { files } from "../db/schema/index.js";
-import { thumbPath } from "../files/storage.js";
+import { blobPath, thumbPath } from "../files/storage.js";
 import { binary, blobFile, harness, type Harness } from "../testing/harness.js";
 import { fakeFfmpeg, jpeg, toolDir } from "../testing/media.js";
+import { thumbnailFile, ThumbnailUnavailable } from "./thumbnails.js";
 
 type Media = NonNullable<Parameters<typeof harness>[0]>["media"];
 
@@ -150,6 +162,76 @@ describe("thumbnails of images", () => {
       expect(res.status, id).toBe(404);
       expect(code(res)).toBe("thumbnail_unavailable");
     }
+  });
+
+  describe("memory budget", () => {
+    const OWNER = "11111111-1111-4111-8111-111111111111";
+
+    function chunk(type: string, data: Buffer): Buffer {
+      const length = Buffer.alloc(4);
+      length.writeUInt32BE(data.length);
+      const crc = Buffer.alloc(4);
+      crc.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type), data])));
+      return Buffer.concat([length, Buffer.from(type), data, crc]);
+    }
+
+    /** A few bytes of PNG whose header claims what a decode would cost; the pixels are missing. */
+    function claimingPng(opts: { width: number; height: number; depth: 8 | 16; interlace: 0 | 1 }) {
+      const header = Buffer.alloc(13);
+      header.writeUInt32BE(opts.width, 0);
+      header.writeUInt32BE(opts.height, 4);
+      header[8] = opts.depth;
+      header[9] = 6; // RGBA
+      header[12] = opts.interlace;
+      const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      return Buffer.concat([
+        signature,
+        chunk("IHDR", header),
+        chunk("IDAT", deflateSync(Buffer.alloc(16))),
+        chunk("IEND", Buffer.alloc(0)),
+      ]);
+    }
+
+    async function reasonFor(bytes: Buffer): Promise<string> {
+      const dataDir = mkdtempSync(join(tmpdir(), "cloud-thumb-"));
+      const versionId = crypto.randomUUID();
+      const blob = blobPath(dataDir, OWNER, versionId);
+      mkdirSync(dirname(blob), { recursive: true });
+      writeFileSync(blob, bytes);
+      try {
+        await thumbnailFile({
+          dataDir,
+          ownerId: OWNER,
+          versionId,
+          mime: "image/png",
+          size: 256,
+          tools: { ffmpeg: null, ffprobe: null },
+        });
+      } catch (err) {
+        if (err instanceof ThumbnailUnavailable) return err.message;
+        throw err;
+      }
+      return "rendered";
+    }
+
+    it("refuses an interlaced 16-bit PNG whose decode needs gigabytes", async () => {
+      const bomb = claimingPng({ width: 8000, height: 8000, depth: 16, interlace: 1 });
+      expect(await reasonFor(bomb)).toBe("image_too_large");
+    });
+
+    it("refuses more pixels than the input limit, interlaced or not", async () => {
+      const huge = claimingPng({ width: 16000, height: 16000, depth: 8, interlace: 0 });
+      expect(await reasonFor(huge)).toBe("image_too_large");
+    });
+
+    it("still renders a normal interlaced PNG", async () => {
+      const png = await sharp({
+        create: { width: 300, height: 200, channels: 3, background: "#369" },
+      })
+        .png({ progressive: true })
+        .toBuffer();
+      expect(await reasonFor(png)).toBe("rendered");
+    });
   });
 
   it("is scoped to the owner's active files", async () => {
