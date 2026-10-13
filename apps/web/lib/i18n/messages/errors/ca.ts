@@ -16,6 +16,7 @@ export const ca: Errors = {
   invalid_move: "Aquest element no es pot moure ni canviar d'aquesta manera.",
   quota_exceeded: "No queda prou espai al teu emmagatzematge per a això.",
   version_is_current: "Aquesta és la versió actual. Restaura primer una altra versió.",
+  thumbnail_unavailable: "No hi ha cap vista prèvia disponible per a aquest fitxer.",
   internal:
     "Alguna cosa ha anat malament per la nostra banda. Torna-ho a provar d'aquí a un moment.",
 };
