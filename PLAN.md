@@ -3,7 +3,8 @@
 Status: v3, 2026-10-13. A private, multilingual Dropbox/Google-Photos-style cloud for a
 household, running on a Raspberry Pi 5 and reachable from anywhere over Tailscale.
 
-Released so far: **0.1.0** foundation · **0.2.0** Pi baseline · **0.3.0** auth.
+Released so far: **v0.1.0 → v0.16.0** (all phases 0–13 built; see §9 for status and what is left
+before 1.0).
 
 Settled decisions:
 
@@ -237,3 +238,32 @@ Tracks run as parallel workflow agents (Sonnet), each in its own git worktree an
 2. Trash retention: 30 days. Old versions: kept until the file is deleted or the user prunes.
 3. Share links: 7-day default expiry, password optional.
 4. Portuguese is European Portuguese (`pt-PT`).
+
+## 9. Status (2026-10-13)
+
+Built and released in phase order; actual versions differ from §5 because integration work got
+its own release: 0.4.0 i18n · 0.5.0 files · 0.6.0 search · 0.7.0 sharing · 0.8.0 photos ·
+0.9.0 security · 0.10.0 dashboard/ops · 0.11.0 PWA · 0.12.0 activity wiring + change feed ·
+0.13.0 CLI · 0.14.0 WebDAV · 0.15.0 desktop sync · 0.16.0 fixes from an independent security
+review (7 medium findings, all reproduced and fixed with tests).
+
+Gate at 0.16.0: 976 unit/integration tests (shared 22, web 216, api 454, cli 79, desktop 205)
+and 114 Playwright e2e tests with axe in five locales.
+
+Open before 1.0 (the 1.0 gate is a verified run on a real Pi 5):
+
+- Hardware: run `deploy/pi-setup.md` end to end, a week of nightly backups, a monthly restore
+  test, Tailscale certificates through Caddy, `/sys` thermal readings in the container.
+- Not verified here: the arm64 api image with ffmpeg + sharp (Docker was unavailable after a
+  disk-full event), the Caddyfile (`caddy validate`), WebDAV against `litmus`, Finder/Explorer
+  mounts, desktop builds other than macOS arm64, Android share target on a real device.
+- Low-severity review findings, deferred: step-up re-authentication before creating app
+  passwords/passkeys; a Content-Security-Policy for the web app; CLI refusing plain http to
+  non-localhost servers; expiry for share-target files cached by the service worker;
+  the Caddy container's access to the tailscaled socket; drop-box zero-byte flooding; names
+  that `uniqueName` can push past 255 characters; the global change sequence leaking activity
+  volume across users.
+- Product gaps: a "sign out everywhere" button and password change in the web UI (the API
+  endpoint exists); activity-log retention; TOTP secrets stored unencrypted in SQLite; PDF
+  previews may be blank in Chromium's sandboxed frame; the desktop app has no icon and is
+  unsigned.
