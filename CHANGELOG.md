@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-13
+
+### Added
+
+- Sign in with a passkey (Face ID, Touch ID, Windows Hello or a security key).
+- Two-step verification with an authenticator app, plus ten single-use recovery codes.
+- App passwords: named, revocable tokens for the command-line tool, WebDAV and desktop sync.
+- Activity log of sign-ins and security changes; admins see security events for everyone.
+- Admins can reset a member's two-step verification.
+
+### Fixed
+
+- The header navigation wraps on narrow screens instead of scrolling sideways.
+
 ## [0.8.0] - 2026-10-13
 
 ### Added
