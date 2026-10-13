@@ -102,6 +102,7 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByText("of 100 GiB used")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Files",
+    "Photos",
     "Trash",
     "Admin",
   ]);
