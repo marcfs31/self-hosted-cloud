@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-13
+
+### Added
+
+- `cloud` command-line tool: `login` (with an app password, stored with owner-only file
+  permissions), `whoami`, `ls`, `upload` (resumable, `--recursive`, `--replace`), `download`,
+  `mkdir`, `mv`, `rm` (to the trash), `search` and `share`; `--json` output for scripts and
+  distinct exit codes per failure kind.
+
 ## [0.12.0] - 2026-10-13
 
 ### Added
