@@ -16,16 +16,23 @@ import { createApp } from "../app.js";
 import type { Config } from "../config.js";
 import { openDatabase } from "../db/client.js";
 import { users } from "../db/schema/index.js";
+import type { MediaTools } from "../photos/tools.js";
 
 export const ORIGIN = "http://localhost:3000";
 const PASSWORD = "correct horse battery";
 
-export function harness() {
+export function harness(opts: { media?: Partial<MediaTools> } = {}) {
   const db = openDatabase(":memory:");
   const clock = { t: Date.now() };
   const dataDir = mkdtempSync(join(tmpdir(), "cloud-files-"));
   const config: Config = { production: false, port: 0, dataDir, publicOrigin: ORIGIN };
-  const app = createApp({ config, version: "0.0.0", db, now: () => clock.t });
+  const app = createApp({
+    config,
+    version: "0.0.0",
+    db,
+    now: () => clock.t,
+    ...(opts.media && { media: opts.media }),
+  });
 
   async function signUp(email: string, admin = false) {
     if (admin) {
