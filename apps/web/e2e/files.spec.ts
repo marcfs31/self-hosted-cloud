@@ -103,6 +103,7 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Files",
     "Trash",
+    "Settings",
     "Admin",
   ]);
   await expect(page).toHaveTitle(/^Files · Cloud$/);
@@ -501,7 +502,8 @@ test("the trash is emptied after a confirmation", async () => {
 
 test("storage in use includes every version, and the admin table shows used and quota", async () => {
   await page.goto("/admin");
-  const row = page.getByRole("row", { name: new RegExp(ADMIN.email) });
+  const users = page.getByRole("table", { name: "Users" });
+  const row = users.getByRole("row", { name: new RegExp(ADMIN.email) });
   await expect(row).toContainText("of 100 GiB");
   await expect(page.getByRole("columnheader", { name: "Storage used" })).toBeVisible();
 });
