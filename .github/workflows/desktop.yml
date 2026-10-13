@@ -30,13 +30,17 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # Only the two projects the package needs: a full install also compiles the API's native
+      # modules (better-sqlite3), which the desktop app never loads.
+      - run: pnpm install --frozen-lockfile --filter @cloud/desktop --filter @cloud/shared
       # Builds @cloud/shared and the app, stages the production dependencies and packages.
       - name: Package
         shell: bash
         env:
           TARGETS: ${{ matrix.targets }}
-        run: pnpm --filter @cloud/desktop package $TARGETS
+        run: |
+          read -ra platforms <<< "$TARGETS"
+          pnpm --filter @cloud/desktop package "${platforms[@]}"
       # ditto keeps the symlinks inside a macOS bundle; the other archives do not need it.
       - name: Archive (macOS)
         if: runner.os == 'macOS'
