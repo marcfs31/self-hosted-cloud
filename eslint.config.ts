@@ -11,7 +11,7 @@ export default tseslint.config(
       "**/coverage/**",
       "graft/**",
       ".claude/**",
-      "**/public/sw.js",
+      "apps/web/public/sw*.js",
     ],
   },
   js.configs.recommended,
