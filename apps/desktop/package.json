@@ -15,7 +15,7 @@
     "start": "pnpm build && electron .",
     "smoke": "pnpm build && electron . --smoke",
     "icons": "node packaging/make-icons.ts",
-    "package": "pnpm build && node packaging/package.ts",
+    "package": "pnpm --filter @cloud/shared build && pnpm build && node packaging/package.ts",
     "typecheck": "tsc --noEmit && tsc -p src/renderer/tsconfig.json --noEmit",
     "test": "vitest run"
   },

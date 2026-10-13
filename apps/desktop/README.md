@@ -30,16 +30,43 @@ Electron binary).
 ## Package
 
 ```bash
-pnpm --filter @cloud/desktop package
+pnpm --filter @cloud/desktop package                          # this computer's platform and architecture
+pnpm --filter @cloud/desktop package darwin-arm64 win32-x64   # chosen targets, from any host
+pnpm --filter @cloud/desktop package all                      # every target below
 ```
 
-Builds the app, stages it with its production dependencies only (`pnpm deploy`, hoisted layout
-so the packager's plain copies stay self-contained) and writes an **unsigned** build for the
-current platform and architecture to `apps/desktop/out/` (git-ignored), for example
-`out/Cloud-darwin-arm64/Cloud.app`. `pnpm icons` regenerates the tray icons in `assets/`.
+Targets: `darwin-arm64`, `darwin-x64`, `win32-x64`, `linux-x64`, `linux-arm64`. Packaging builds
+`@cloud/shared` and the app, stages the app with its production dependencies only (`pnpm deploy`,
+hoisted layout so the packager's plain copies stay self-contained) and writes an **unsigned**
+build per target to `apps/desktop/out/` (git-ignored), for example
+`out/Cloud-darwin-arm64/Cloud.app`. The packager downloads the Electron build of each target the
+first time (cached afterwards), so one machine can package all of them: the app has no native
+modules. Each build is roughly 290 to 380 MB unpacked, almost all of it Electron itself:
 
-There is no application icon yet, so the app bundle, the taskbar and the file manager show the
-default Electron icon.
+| Target      | Folder                   | Unpacked |
+| ----------- | ------------------------ | -------- |
+| macOS arm64 | `out/Cloud-darwin-arm64` | 315 MB   |
+| macOS x64   | `out/Cloud-darwin-x64`   | 319 MB   |
+| Windows x64 | `out/Cloud-win32-x64`    | 377 MB   |
+| Linux x64   | `out/Cloud-linux-x64`    | 292 MB   |
+
+### Release builds
+
+`.github/workflows/desktop.yml` runs on every `v*` tag: one job each on `macos-latest` (arm64 and
+x64), `windows-latest` and `ubuntu-latest` installs from the lockfile, packages, archives
+(`.zip` with `ditto` so macOS symlinks survive, `.tar.gz` on Linux) and uploads one artifact per
+OS (`cloud-desktop-macos`, `-windows`, `-linux`) to the run page. Nothing is signed or
+published as a release.
+
+### Icon
+
+`assets/icon.svg` is the source (a white cloud on a blue rounded square). `pnpm icons` renders it
+without image libraries into `icon.png` (1024), `icon.ico` (16 to 256 px, packed by
+`packaging/ico.ts`) and, on a Mac, `icon.icns` (a generated `.iconset` through `iconutil`); the
+results are committed, so other systems need not regenerate them. The packager embeds `icon.icns`
+in the macOS app and `icon.ico` in `Cloud.exe`; Windows and Linux settings windows use
+`icon.png`. The menu-bar app has no Dock icon, so on macOS the icon shows in Finder, Launchpad
+and the Gatekeeper dialog. The tray glyph (`tray*.png`, `trayTemplate*.png`) is the same cloud.
 
 ### Opening an unsigned app
 
@@ -96,5 +123,5 @@ the system trash (`shell.trashItem`), never straight to deletion.
 | `src/ipc/types.ts`    | The renderer/main contract                                       |
 | `src/i18n/`           | Typed dictionaries; `en.ts` is the source                        |
 | `src/sync`, `src/api` | The sync engine and API client (no Electron imports)             |
-| `assets/`             | Settings page HTML/CSS, tray icons                               |
-| `packaging/`          | Icon generator and the packaging script                          |
+| `assets/`             | Settings page HTML/CSS, tray and application icons               |
+| `packaging/`          | Icon generator, ICO packer and the packaging script              |
