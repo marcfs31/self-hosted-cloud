@@ -30,9 +30,12 @@ pnpm check   # prettier --check, eslint, tsc --noEmit (all packages), vitest, ve
 pnpm build   # shared → api → web, topological
 ```
 
-Merge method: no remote yet; phases land on `main` via fast-forward from a `feat/*` branch.
-Release: manual bump of every `package.json` + `CHANGELOG.md` → `chore(release): X.Y.Z` →
-annotated tag `vX.Y.Z`. `pnpm versions:check` fails if manifests or changelog disagree.
+Merge method: rebase only, through a PR. The `main` ruleset requires `check`, `e2e` and
+`secrets`, an up-to-date branch and linear history. Changes to `.github/**`, `AGENTS.md` and
+`CLAUDE.md` go in their own PR that Marc merges.
+Release: manual bump of every `package.json` + `CHANGELOG.md` → `chore(release): X.Y.Z` PR →
+after the merge, annotated tag `vX.Y.Z` on the merged `main` commit (v* tags cannot be moved or
+deleted). `pnpm versions:check` fails if manifests or changelog disagree.
 
 ## Where to edit
 
@@ -47,7 +50,7 @@ annotated tag `vX.Y.Z`. `pnpm versions:check` fails if manifests or changelog di
 
 ## Out of scope unless asked
 
-- WebDAV, folder sharing, EXIF-based photo dates, multi-node storage.
+- Multi-node storage, shared WebDAV locks.
 - TypeScript 7 (typescript-eslint supports < 6.1 as of 2026-10-13).
 - New runtime dependencies without a stated reason in the commit body.
 
@@ -67,3 +70,4 @@ annotated tag `vX.Y.Z`. `pnpm versions:check` fails if manifests or changelog di
 | 2026-10-13 | TypeScript 6.0.x                                                  | typescript-eslint peer range excludes 7.                                         |
 | 2026-10-13 | ID-addressed blob storage instead of a mirrored folder tree       | Removes the path-traversal class; DB is the single owner of names and hierarchy. |
 | 2026-10-13 | ESLint config in TS via `--flag unstable_native_nodejs_ts_config` | Avoids adding `jiti`.                                                            |
+| 2026-10-13 | Public repository on GitHub Free                                  | Rulesets, arm64 runners, secret scanning and CodeQL are free; history audited.   |
