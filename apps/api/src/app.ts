@@ -11,6 +11,7 @@ import { requireSameOrigin } from "./http/csrf.js";
 import { createFilesRouter } from "./files/routes.js";
 import { UPLOAD_PATH, createUploadService } from "./files/uploads.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
+import { createSystemRouter } from "./system/routes.js";
 
 export interface AppOptions {
   config: Config;
@@ -66,6 +67,10 @@ export function createApp({ config, version, db, now = Date.now }: AppOptions): 
   });
 
   app.use("/api/auth", createAuthRouter({ db, sessions, now }));
+  app.use(
+    "/api/admin/system",
+    createSystemRouter({ sessions, dataDir: config.dataDir, version, now }),
+  );
   app.use("/api/admin", createAdminRouter({ db, sessions, now }));
   app.use("/api", createFilesRouter({ db, sessions, config, now }));
   app.use("/api", notFoundHandler);
