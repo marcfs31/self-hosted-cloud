@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-13
+
+### Changed
+
+- Base images are pinned by digest (`node:24-slim` in both images, `caddy:2` in
+  `deploy/docker-compose.yml`), so the Pi runs exactly what CI built and tested; Dependabot keeps
+  the digests current. Copy the new `deploy/docker-compose.yml` to `/opt/cloud` when upgrading.
+- Release images are built on native arm64 runners instead of under QEMU.
+
+### Fixed
+
+- The Windows desktop build: CI installs only the desktop app's own dependencies instead of
+  compiling the API's native modules.
+- The workstation smoke test in `deploy/operations.md` works with the required `SECRET_KEY` and
+  on machines where ports 80 and 443 are taken.
+
 ## [0.17.0] - 2026-10-13
 
 ### Changed (breaking)
