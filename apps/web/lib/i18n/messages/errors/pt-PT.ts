@@ -16,5 +16,6 @@ export const ptPT: Errors = {
   invalid_move: "Esse item não pode ser movido ou alterado desta forma.",
   quota_exceeded: "Não há espaço suficiente no seu armazenamento para isto.",
   version_is_current: "Esta é a versão atual. Restaure outra versão primeiro.",
+  share_locked: "Esta ligação está protegida. Introduza a palavra-passe para a abrir.",
   internal: "Algo correu mal do nosso lado. Tente novamente dentro de instantes.",
 };

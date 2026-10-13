@@ -17,5 +17,6 @@ export const it: Errors = {
   invalid_move: "Questo elemento non può essere spostato o modificato in questo modo.",
   quota_exceeded: "Non c'è abbastanza spazio libero nel tuo archivio per questo.",
   version_is_current: "Questa è la versione attuale. Ripristina prima un'altra versione.",
+  share_locked: "Questo link è protetto. Inserisci la password per aprirlo.",
   internal: "Qualcosa è andato storto da parte nostra. Riprova tra un attimo.",
 };
