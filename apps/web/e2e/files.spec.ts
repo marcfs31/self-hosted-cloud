@@ -1,3 +1,4 @@
+import { ADMIN_NAV } from "./nav";
 import AxeBuilder from "@axe-core/playwright";
 import {
   expect,
@@ -100,13 +101,9 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByText("This folder is empty")).toBeVisible();
   await expect(page.getByRole("meter", { name: "Storage" })).toBeVisible();
   await expect(page.getByText("of 100 GiB used")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
-    "Files",
-    "Photos",
-    "Shared links",
-    "Trash",
-    "Admin",
-  ]);
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText(
+    ADMIN_NAV,
+  );
   await expect(page).toHaveTitle(/^Files · Cloud$/);
   await expectNoViolations();
 });

@@ -1,3 +1,4 @@
+import { ADMIN_NAV } from "./nav";
 import AxeBuilder from "@axe-core/playwright";
 import {
   expect,
@@ -180,12 +181,9 @@ async function downloaded(page: Page, trigger: Locator): Promise<{ name: string;
 test("sharing a file shows the full link once, with Copy and a warning", async () => {
   await owner.goto("/");
   await expect(rowOf("hello-share.txt")).toBeVisible();
-  await expect(owner.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
-    "Files",
-    "Shared links",
-    "Trash",
-    "Admin",
-  ]);
+  await expect(owner.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText(
+    ADMIN_NAV,
+  );
 
   const dialog = await openShareDialog("hello-share.txt");
   const expiry = dialog.getByLabel("Link expires");
