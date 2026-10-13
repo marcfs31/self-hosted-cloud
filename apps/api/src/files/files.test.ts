@@ -439,6 +439,25 @@ describe("content headers", () => {
     }
   });
 
+  it("lets Chromium's PDF viewer run for an inline PDF, and for nothing else", async () => {
+    const h = harness();
+    const { a } = await twoUsers(h);
+    const root = (await a.root()).folder;
+    const pdf = await a.upload(root.id, "paper.pdf", Buffer.from("%PDF-1.4\n%%EOF\n"));
+
+    const inline = await binary(a.get(`/api/files/${pdf}/content`));
+    expect(inline.get("Content-Type")).toBe("application/pdf");
+    expect(inline.get("Content-Security-Policy")).toBe(
+      "default-src 'none'; frame-ancestors 'self'",
+    );
+    expect(inline.get("X-Content-Type-Options")).toBe("nosniff");
+
+    const forced = await binary(a.get(`/api/files/${pdf}/content?download=1`));
+    expect(forced.get("Content-Type")).toBe("application/octet-stream");
+    expect(forced.get("Content-Security-Policy")).toContain("sandbox");
+    expect(forced.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
   it("encodes awkward file names safely in Content-Disposition", async () => {
     const h = harness();
     const { a } = await twoUsers(h);
