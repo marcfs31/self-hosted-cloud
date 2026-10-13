@@ -43,8 +43,25 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 /**
- * The only function in the web app that calls fetch. `path` is relative to /api,
- * for example "/auth/me". Resolves with the parsed JSON body (undefined for 204).
+ * The only place in the web app that calls fetch. `path` is relative to /api. Resolves with
+ * the response of a 2xx answer; every other outcome throws an ApiError.
+ */
+export async function apiFetchResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...init, credentials: "same-origin" });
+  } catch {
+    throw new ApiError("internal", 0);
+  }
+  if (!res.ok) {
+    throw new ApiError(errorCodeFromBody(await readJson(res)), res.status);
+  }
+  return res;
+}
+
+/**
+ * Calls the API and resolves with the parsed JSON body (undefined for 204). `path` is relative
+ * to /api, for example "/auth/me".
  */
 export async function apiFetch<T = void>(path: string, init: ApiInit = {}): Promise<T> {
   const { json, headers, ...rest } = init;
@@ -55,21 +72,11 @@ export async function apiFetch<T = void>(path: string, init: ApiInit = {}): Prom
     body = JSON.stringify(json);
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`/api${path}`, {
-      ...rest,
-      headers: requestHeaders,
-      credentials: "same-origin",
-      ...(body === undefined ? {} : { body }),
-    });
-  } catch {
-    throw new ApiError("internal", 0);
-  }
-
-  if (!res.ok) {
-    throw new ApiError(errorCodeFromBody(await readJson(res)), res.status);
-  }
+  const res = await apiFetchResponse(path, {
+    ...rest,
+    headers: requestHeaders,
+    ...(body === undefined ? {} : { body }),
+  });
   if (res.status === 204) {
     return undefined as T;
   }
