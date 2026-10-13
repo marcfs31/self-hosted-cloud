@@ -11,6 +11,7 @@ export const ptPT: Common = {
   },
   nav: {
     files: "Ficheiros",
+    trash: "Reciclagem",
     admin: "Administração",
     logout: "Terminar sessão",
     loggingOut: "A terminar sessão…",
@@ -21,11 +22,6 @@ export const ptPT: Common = {
   },
   localeSwitcher: {
     label: "Idioma",
-  },
-  home: {
-    title: "Ficheiros",
-    signedInAs: (email) => `Sessão iniciada como ${email}`,
-    comingSoon: "A navegação pelos ficheiros chega na próxima versão.",
   },
   notFound: {
     title: "Página não encontrada",

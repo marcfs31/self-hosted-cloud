@@ -45,7 +45,14 @@ export function AppHeader() {
         <nav aria-label={t.common.app.mainNavLabel}>
           <ul className="nav-list">
             <li>
-              <NavLink href="/" label={t.common.nav.files} current={pathname === "/"} />
+              <NavLink
+                href="/"
+                label={t.common.nav.files}
+                current={pathname === "/" || pathname.startsWith("/folders/")}
+              />
+            </li>
+            <li>
+              <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
             {user.role === "admin" ? (
               <li>

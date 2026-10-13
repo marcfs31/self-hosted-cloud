@@ -11,6 +11,7 @@ export const en = {
   },
   nav: {
     files: "Files",
+    trash: "Trash",
     admin: "Admin",
     logout: "Log out",
     loggingOut: "Logging out…",
@@ -21,11 +22,6 @@ export const en = {
   },
   localeSwitcher: {
     label: "Language",
-  },
-  home: {
-    title: "Files",
-    signedInAs: (email: string) => `Signed in as ${email}`,
-    comingSoon: "File browsing arrives in the next release.",
   },
   notFound: {
     title: "Page not found",

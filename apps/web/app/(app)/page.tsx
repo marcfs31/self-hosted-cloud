@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Home } from "../../components/home";
+import { FolderView } from "../../components/files/folder-view";
 import { getT } from "../../lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: (await getT()).common.home.title };
+  return { title: (await getT()).files.title };
 }
 
 export default function HomePage() {
-  return <Home />;
+  return <FolderView folderId={null} />;
 }

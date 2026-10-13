@@ -11,6 +11,7 @@ export const es: Common = {
   },
   nav: {
     files: "Archivos",
+    trash: "Papelera",
     admin: "Administración",
     logout: "Cerrar sesión",
     loggingOut: "Cerrando sesión…",
@@ -21,11 +22,6 @@ export const es: Common = {
   },
   localeSwitcher: {
     label: "Idioma",
-  },
-  home: {
-    title: "Archivos",
-    signedInAs: (email) => `Sesión iniciada como ${email}`,
-    comingSoon: "La navegación por los archivos llegará en la próxima versión.",
   },
   notFound: {
     title: "Página no encontrada",

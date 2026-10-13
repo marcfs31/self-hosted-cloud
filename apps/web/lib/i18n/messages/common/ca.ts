@@ -11,6 +11,7 @@ export const ca: Common = {
   },
   nav: {
     files: "Fitxers",
+    trash: "Paperera",
     admin: "Administració",
     logout: "Tanca la sessió",
     loggingOut: "Tancant la sessió…",
@@ -21,11 +22,6 @@ export const ca: Common = {
   },
   localeSwitcher: {
     label: "Llengua",
-  },
-  home: {
-    title: "Fitxers",
-    signedInAs: (email) => `Sessió iniciada com a ${email}`,
-    comingSoon: "La navegació pels fitxers arribarà a la propera versió.",
   },
   notFound: {
     title: "No s'ha trobat la pàgina",
