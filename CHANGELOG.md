@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-13
+
+### Added
+
+- Search across all folders by any part of a name, with live results, the folder path of each
+  result, and a `/` keyboard shortcut.
+- Full-screen previews for images, video, audio, PDF and text files, with next/previous and
+  keyboard navigation; text previews read at most the first 1 MiB.
+
 ## [0.5.0] - 2026-10-13
 
 ### Added
