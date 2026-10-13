@@ -4,8 +4,10 @@ import {
   INLINE_MIME_TYPES,
   TRASH_RETENTION_DAYS,
   createFolderRequest,
+  existsRequest,
   uniqueName,
   updateFileRequest,
+  type ExistsResponse,
   type FileNode,
   type FileVersion,
   type FolderListing,
@@ -264,6 +266,34 @@ export function createFilesRouter(opts: {
     });
     await removeBlob(config.dataDir, version.ownerId, version.id);
     res.status(204).end();
+  });
+
+  router.post("/files/exists", (req, res) => {
+    const { user } = authOf(res);
+    const { sha256s } = existsRequest.parse(req.body);
+    const wanted = sql.join(
+      [...new Set(sha256s)].map((hash) => sql`${hash}`),
+      sql`, `,
+    );
+    // Every version of an active file counts; a file is active when nothing in its chain is trashed.
+    const rows = db.all<{ sha256: string }>(sql`
+      with recursive candidates(id) as (
+        select distinct v.file_id from file_versions v
+          join files f on f.id = v.file_id
+         where v.owner_id = ${user.id} and f.owner_id = ${user.id} and f.kind = 'file'
+           and v.sha256 in (${wanted})
+      ), chain(file_id, parent_id, deleted_at, depth) as (
+        select f.id, f.parent_id, f.deleted_at, 0 from files f where f.id in (select id from candidates)
+        union all
+        select c.file_id, p.parent_id, p.deleted_at, c.depth + 1
+          from files p join chain c on p.id = c.parent_id
+         where c.depth < 4096
+      )
+      select distinct v.sha256 from file_versions v
+       where v.owner_id = ${user.id} and v.sha256 in (${wanted})
+         and v.file_id in (select file_id from chain group by file_id having count(deleted_at) = 0)`);
+    const body: ExistsResponse = { existing: rows.map((r) => r.sha256) };
+    res.json(body);
   });
 
   router.get("/usage", (_req, res) => {
