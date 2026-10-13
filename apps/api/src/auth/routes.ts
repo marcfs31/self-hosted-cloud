@@ -4,20 +4,26 @@ import {
   DEFAULT_QUOTA_BYTES,
   loginRequest,
   registerRequest,
+  type LoginResponse,
   setupRequest,
   type MeResponse,
   type SetupStatusResponse,
 } from "@cloud/shared";
+import { recordActivity } from "../activity/record.js";
 import type { Db } from "../db/client.js";
 import { invites, sessions, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
-import { createRateLimiter } from "./rate-limit.js";
-import { authOf, toUser, type SessionService } from "./sessions.js";
+import { createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
+import {
+  authOf,
+  PENDING_SESSION_TTL_MS,
+  sessionOf,
+  toUser,
+  type SessionService,
+} from "./sessions.js";
+import { totpEnabled } from "./second-factor.js";
 import { hashToken } from "./tokens.js";
-
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_FAILURES = 5;
 
 export function createAuthRouter(opts: {
   db: Db;
@@ -25,7 +31,7 @@ export function createAuthRouter(opts: {
   now: () => number;
 }): Router {
   const { db, sessions: sessionService, now } = opts;
-  const limiterOptions = { max: MAX_FAILURES, windowMs: WINDOW_MS, now };
+  const limiterOptions = { ...FAILURE_LIMIT, now };
   const loginLimiter = createRateLimiter(limiterOptions);
   const registerLimiter = createRateLimiter(limiterOptions);
   const setupLimiter = createRateLimiter(limiterOptions);
@@ -74,21 +80,48 @@ export function createAuthRouter(opts: {
 
   router.post("/login", async (req, res) => {
     const { email, password } = loginRequest.parse(req.body);
-    const key = `${req.ip ?? "unknown"}|${email}`;
+    const ip = req.ip;
+    const key = `${ip ?? "unknown"}|${email}`;
     loginLimiter.check(key);
     const row = db.select().from(users).where(eq(users.email, email)).get();
     const ok = await verifyPassword(row?.passwordHash, password);
     if (!row || !ok) {
       loginLimiter.fail(key);
+      // Only a known email is attributed; unknown ones would let anyone fill the log.
+      if (row) {
+        recordActivity(db, {
+          userId: row.id,
+          type: "login_failed",
+          detail: { method: "password" },
+          ip,
+          at: now(),
+        });
+      }
       throw new HttpError(401, "invalid_credentials");
     }
     loginLimiter.clear(key);
-    db.delete(sessions)
-      .where(and(eq(sessions.userId, row.id), lt(sessions.expiresAt, new Date(now()))))
-      .run();
-    const token = sessionService.insert(db, row.id, req.get("user-agent"));
-    sessionService.setCookie(res, token);
-    const response: MeResponse = { user: toUser(row) };
+    const mfaRequired = totpEnabled(db, row.id);
+    const token = db.transaction((tx) => {
+      tx.delete(sessions)
+        .where(and(eq(sessions.userId, row.id), lt(sessions.expiresAt, new Date(now()))))
+        .run();
+      const created = sessionService.insert(tx, row.id, req.get("user-agent"), {
+        mfaPending: mfaRequired,
+      });
+      // With a second factor the sign-in is not complete yet; it is logged after the code.
+      if (!mfaRequired) {
+        recordActivity(tx, {
+          userId: row.id,
+          type: "login_succeeded",
+          detail: { method: "password" },
+          ip,
+          at: now(),
+        });
+      }
+      return created;
+    });
+    sessionService.setCookie(res, token, mfaRequired ? PENDING_SESSION_TTL_MS : undefined);
+    const response: LoginResponse = mfaRequired ? { mfaRequired: true } : { user: toUser(row) };
     res.json(response);
   });
 
@@ -146,8 +179,16 @@ export function createAuthRouter(opts: {
     res.status(201).json(response);
   });
 
-  router.post("/logout", sessionService.requireUser, (_req, res) => {
-    sessionService.destroy(res, authOf(res).tokenHash);
+  router.post("/logout", sessionService.requireUserOrPending, (req, res) => {
+    const { tokenHash, user, mfaPending } = sessionOf(res);
+    db.transaction((tx) => {
+      tx.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).run();
+      // A session that never finished signing in was never a login, so it has no logout.
+      if (!mfaPending) {
+        recordActivity(tx, { userId: user.id, type: "logout", ip: req.ip, at: now() });
+      }
+    });
+    sessionService.clearCookie(res);
     res.status(204).end();
   });
 
