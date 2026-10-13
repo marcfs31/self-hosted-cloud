@@ -5,6 +5,7 @@ import type { HealthResponse } from "@cloud/shared";
 import { createActivityRouter } from "./activity/routes.js";
 import { createAdminRouter } from "./admin/routes.js";
 import { createChangesRouter } from "./changes/routes.js";
+import { createDavRouter } from "./dav/routes.js";
 import { createAppPasswordRouter } from "./auth/app-passwords.js";
 import { createMfaRouter } from "./auth/mfa-routes.js";
 import { createPasskeyRouter } from "./auth/passkeys.js";
@@ -54,7 +55,7 @@ function databaseState(db: Db): "ok" | "unavailable" {
 }
 
 export type CloudApp = express.Express & {
-  /** Expire abandoned uploads; the server runs it hourly. */
+  /** Expire abandoned uploads and WebDAV temp files; the server runs it hourly. */
   cleanUpUploads: () => Promise<void>;
 };
 
@@ -67,6 +68,11 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
 
   const uploads = createUploadService({ db, config, now });
   const publicShares = createPublicShares({ db, config, now, uploads });
+
+  // WebDAV is its own surface: app-password credentials only (never the cookie), no CSRF
+  // middleware, and no body parser in front of it, since PUT bodies are streamed to disk.
+  const dav = createDavRouter({ db, config, sessions, now });
+  app.use("/dav", dav.router);
 
   app.use("/api", requireSameOrigin(config.publicOrigin));
   // tus owns its request bodies, so it is mounted before the JSON parser and without a mount
@@ -106,5 +112,9 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
   app.use("/api", notFoundHandler);
   app.use(errorHandler);
 
-  return Object.assign(app, { cleanUpUploads: uploads.cleanup });
+  const cleanUpUploads = async (): Promise<void> => {
+    await uploads.cleanup();
+    await dav.cleanup();
+  };
+  return Object.assign(app, { cleanUpUploads });
 }

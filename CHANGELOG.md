@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-13
+
+### Added
+
+- WebDAV at `/dav/`: mount the cloud as a drive in macOS Finder, Windows Explorer and phone file
+  apps, signing in with your email and an app password (never the account password).
+- Writes over WebDAV create new versions, deletes go to the trash, and everything appears in the
+  activity log and the change feed like any other upload.
+
+### Changed
+
+- Caddy routes `/dav` to the api without body limits or compression.
+
 ## [0.13.0] - 2026-10-13
 
 ### Added

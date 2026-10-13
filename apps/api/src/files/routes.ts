@@ -22,13 +22,13 @@ import type { Db } from "../db/client.js";
 import { fileVersions, files } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { findVersion, sendBlob } from "./content.js";
+import { createFolder, relocateItem, trashItem } from "./mutations.js";
 import { removeBlob } from "./storage.js";
 import { purgeAllTrashed, purgeItem } from "./trash.js";
 import {
   activeSiblingNames,
   activeSubtree,
   breadcrumbsOf,
-  chainOf,
   getNode,
   getOrCreateRoot,
   isActive,
@@ -78,25 +78,9 @@ export function createFilesRouter(opts: {
   router.post("/folders", (req, res) => {
     const { user } = authOf(res);
     const { parentId, name } = createFolderRequest.parse(req.body);
-    const node: FileNode = db.transaction((tx) => {
-      requireActive(tx, user.id, parentId, "folder");
-      if (activeSiblingNames(tx, parentId).has(name)) throw new HttpError(409, "name_conflict");
-      const at = new Date(now());
-      const id = crypto.randomUUID();
-      tx.insert(files)
-        .values({
-          id,
-          ownerId: user.id,
-          parentId,
-          name,
-          kind: "folder",
-          createdAt: at,
-          updatedAt: at,
-        })
-        .run();
-      recordChanges(tx, user.id, [id], at.getTime());
-      return getNode(tx, id);
-    });
+    const node: FileNode = db.transaction((tx) =>
+      getNode(tx, createFolder(tx, user.id, parentId, name, now())),
+    );
     res.status(201).json(node);
   });
 
@@ -105,26 +89,7 @@ export function createFilesRouter(opts: {
     const patch = updateFileRequest.parse(req.body);
     const node: FileNode = db.transaction((tx) => {
       const item = requireActive(tx, user.id, req.params.id);
-      if (item.parentId === null) throw new HttpError(409, "invalid_move");
-      const targetParentId = patch.parentId ?? item.parentId;
-      const name = patch.name ?? item.name;
-      if (patch.parentId !== undefined) {
-        requireActive(tx, user.id, patch.parentId, "folder");
-        // Moving into itself or a descendant: the target's chain would pass through the item.
-        if (chainOf(tx, patch.parentId).some((entry) => entry.id === item.id)) {
-          throw new HttpError(409, "invalid_move");
-        }
-      }
-      const changed = targetParentId !== item.parentId || name !== item.name;
-      if (changed) {
-        const taken = activeSiblingNames(tx, targetParentId);
-        if (taken.has(name)) throw new HttpError(409, "name_conflict");
-        tx.update(files)
-          .set({ name, parentId: targetParentId, updatedAt: new Date(now()) })
-          .where(eq(files.id, item.id))
-          .run();
-        recordChanges(tx, user.id, [item.id], now());
-      }
+      relocateItem(tx, user.id, item, patch, now());
       return getNode(tx, item.id);
     });
     res.json(node);
@@ -133,23 +98,9 @@ export function createFilesRouter(opts: {
   router.delete("/files/:id", (req, res) => {
     const { user } = authOf(res);
     db.transaction((tx) => {
-      const item = requireActive(tx, user.id, req.params.id);
-      if (item.parentId === null) throw new HttpError(409, "invalid_move");
-      // Descendants stay unmarked but become inactive: clients get a delete for each of them.
-      const affected = activeSubtree(tx, item.id);
-      const at = now();
-      tx.update(files)
-        .set({ deletedAt: new Date(at) })
-        .where(eq(files.id, item.id))
-        .run();
-      recordChanges(tx, user.id, affected, at);
-      recordActivity(tx, {
-        userId: user.id,
-        type: "trash",
-        fileId: item.id,
-        detail: { name: item.name, kind: item.kind },
+      trashItem(tx, user.id, requireActive(tx, user.id, req.params.id), {
+        at: now(),
         ip: req.ip,
-        at,
       });
     });
     res.status(204).end();

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
+import { constants } from "node:fs";
+import { copyFile, mkdir, open, readdir, rename, stat, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { THUMBNAIL_SIZES } from "@cloud/shared";
@@ -44,6 +45,51 @@ export function uploadsDir(dataDir: string): string {
 /** Where @tus/file-store keeps the bytes of an unfinished upload. */
 export function uploadTempPath(dataDir: string, uploadId: string): string {
   return join(uploadsDir(dataDir), assertUuid(uploadId));
+}
+
+/** Where WebDAV writes the body of a PUT (or the copy of a blob) until commitBlob moves it. */
+export function davTempDir(dataDir: string): string {
+  return resolve(join(dataDir, "tmp", "dav"));
+}
+
+export function davTempPath(dataDir: string, id: string): string {
+  return join(davTempDir(dataDir), assertUuid(id));
+}
+
+/** Remove WebDAV temp files not modified for `olderThanMs`: leftovers of a crashed process. */
+export async function sweepDavTemp(
+  dataDir: string,
+  olderThanMs: number,
+  nowMs: number,
+): Promise<void> {
+  const directory = davTempDir(dataDir);
+  let names: string[];
+  try {
+    names = await readdir(directory);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  for (const name of names) {
+    if (!isUuid(name)) continue;
+    const path = join(directory, name);
+    const info = await stat(path).catch(() => undefined);
+    if (info && nowMs - info.mtimeMs > olderThanMs) await unlinkQuietly(path, "dav temp");
+  }
+}
+
+/** Copy a stored version's bytes to a new temp path, ready for commitBlob (a WebDAV COPY). */
+export async function copyBlobToTemp(
+  dataDir: string,
+  ownerId: string,
+  versionId: string,
+  tempPath: string,
+): Promise<void> {
+  await copyFile(blobPath(dataDir, ownerId, versionId), tempPath, constants.COPYFILE_EXCL);
+}
+
+export async function removeDavTemp(dataDir: string, id: string): Promise<void> {
+  await unlinkQuietly(davTempPath(dataDir, id), "dav temp");
 }
 
 export interface CommittedBlob {
