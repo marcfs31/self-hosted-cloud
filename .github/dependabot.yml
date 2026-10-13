@@ -14,6 +14,27 @@ updates:
         patterns: ["typescript-eslint", "@typescript-eslint/*", "eslint", "@eslint/*"]
       vitest:
         patterns: ["vitest", "@vitest/*"]
+  # Base images are pinned by digest; these keep the digests current within the same tag.
+  - package-ecosystem: docker
+    directories: ["/apps/api", "/apps/web"]
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
+    groups:
+      node-base:
+        patterns: ["node"]
+    ignore:
+      # Node major versions are a deliberate upgrade (.nvmrc, CI and both images move together).
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
