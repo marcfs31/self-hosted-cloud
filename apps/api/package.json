@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "backup-db": "node dist/backup-db.js"
   },
   "dependencies": {
     "@cloud/shared": "workspace:*",
