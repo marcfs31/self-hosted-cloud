@@ -245,30 +245,35 @@ Built and released in phase order; actual versions differ from §5 because integ
 its own release: 0.4.0 i18n · 0.5.0 files · 0.6.0 search · 0.7.0 sharing · 0.8.0 photos ·
 0.9.0 security · 0.10.0 dashboard/ops · 0.11.0 PWA · 0.12.0 activity wiring + change feed ·
 0.13.0 CLI · 0.14.0 WebDAV · 0.15.0 desktop sync · 0.16.0 fixes from an independent security
-review (7 medium findings, all reproduced and fixed with tests).
+review (7 medium findings, all reproduced and fixed with tests) · 0.17.0 the review's low findings
+and product gaps, WebDAV dead properties and full `If` evaluation (litmus), desktop builds.
 
-Gate at 0.16.0: 976 unit/integration tests (shared 22, web 216, api 454, cli 79, desktop 205)
-and 114 Playwright e2e tests with axe in five locales.
+Gate at 0.17.0: 1,098 unit/integration tests (shared 33, web 230, api 546, cli 82, desktop 207)
+and 124 Playwright e2e tests with axe in five locales.
+
+Verified 2026-10-13 without a Pi:
+
+- The arm64 api image (725 MB) builds and runs as `node`; sharp 0.35.5 and ffmpeg/ffprobe 5.1
+  work inside it; health, setup, a tus upload, a WebP thumbnail and the change feed pass against
+  the running container.
+- `deploy/scripts/validate-config.sh`: the Caddyfile validates with certificate files and with
+  Caddy's internal CA, refuses to start without certificates, both compose files render, and a
+  renewed certificate is served after `caddy reload --force`. A full compose stack (web, api,
+  Caddy) answered health, setup and an upload through Caddy (run before `SECRET_KEY` became
+  required; the validator renders compose with it).
+- WebDAV against `litmus` 0.13 (Debian package): basic 16/16, copymove 13/13, props 30/30,
+  http 4/4, locks 33/34. The one failure is `lock_shared`: only exclusive locks exist (RFC 4918
+  permits that), so the 7 tests that need a shared lock are skipped.
+- Desktop packages build for macOS, Windows and Linux from one host; CI builds them on tags.
+- Full git history scanned with gitleaks: no secrets (one public RFC 6238 test vector is
+  fingerprinted in `.gitleaksignore`).
 
 Open before 1.0 (the 1.0 gate is a verified run on a real Pi 5):
 
 - Hardware: run `deploy/pi-setup.md` end to end, a week of nightly backups, a monthly restore
-  test, Tailscale certificates through Caddy, `/sys` thermal readings in the container.
-- Verified 2026-10-13: the arm64 api image (725 MB) builds and runs as `node`; sharp 0.35.5 and
-  ffmpeg/ffprobe 5.1 work inside it; health, setup, a tus upload, a WebP thumbnail and the change
-  feed pass against the running container.
-- Verified 2026-10-13: WebDAV against `litmus` 0.13 (Debian package): basic 16/16, copymove 13/13,
-  props 30/30, http 4/4, locks 33/34. The one failure is `lock_shared`: only exclusive locks
-  exist (RFC 4918 permits that), so the 7 tests that need a shared lock are skipped.
-- Not verified here: the Caddyfile (`caddy validate`), Finder/Explorer mounts, desktop builds
-  other than macOS arm64, Android share target on a real device.
-- Low-severity review findings, deferred: step-up re-authentication before creating app
-  passwords/passkeys; a Content-Security-Policy for the web app; CLI refusing plain http to
-  non-localhost servers; expiry for share-target files cached by the service worker;
-  the Caddy container's access to the tailscaled socket; drop-box zero-byte flooding; names
-  that `uniqueName` can push past 255 characters; the global change sequence leaking activity
-  volume across users.
-- Product gaps: a "sign out everywhere" button and password change in the web UI (the API
-  endpoint exists); activity-log retention; TOTP secrets stored unencrypted in SQLite; PDF
-  previews may be blank in Chromium's sandboxed frame; the desktop app has no icon and is
-  unsigned.
+  test, Tailscale certificates through `cloud-tls.timer`, `/sys` thermal readings in the container.
+- Clients on real devices: Windows Explorer and Finder WebDAV mounts, the Android share target
+  and photo backup, the desktop app on Windows and Linux.
+- Code signing and notarization for the desktop app (needs Apple and Windows certificates).
+- Known limits, accepted: exclusive WebDAV locks only; drop-box limiters are per process and
+  reset on restart; PROPPATCH does not change the ETag or appear in the change feed.
