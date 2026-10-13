@@ -32,9 +32,9 @@ updates:
     directory: /deploy
     schedule:
       interval: daily
+    # Image tags are not SemVer here, so Dependabot accepts only the default cooldown.
     cooldown:
       default-days: 3
-      semver-major-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
