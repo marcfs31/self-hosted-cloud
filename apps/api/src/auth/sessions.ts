@@ -63,6 +63,15 @@ export interface SessionService {
    * still waiting for its second factor answers 401 mfa_required.
    */
   requireUser: RequestHandler;
+  /**
+   * The user an app-password token belongs to, or undefined for an unknown token. Marks the
+   * password as used. For protocols that carry the token themselves (WebDAV Basic and Bearer).
+   */
+  appPasswordUser(
+    token: string,
+    /** Also require this (lower-case) email to be the owner's, for protocols that send a username. */
+    email?: string,
+  ): { user: User; appPasswordId: string } | undefined;
   /** Like requireUser but lets a session waiting for its second factor through. */
   requireUserOrPending: RequestHandler;
   requireRole(role: Role): RequestHandler;
@@ -87,15 +96,23 @@ export function createSessionService(opts: {
     });
   }
 
-  function authenticateBearer(token: string, res: Response): void {
-    if (token === "") throw new HttpError(401, "unauthenticated");
+  function appPasswordUser(
+    token: string,
+    email?: string,
+  ): { user: User; appPasswordId: string } | undefined {
+    if (token === "") return undefined;
     const row = db
       .select({ id: appPasswords.id, user: users })
       .from(appPasswords)
       .innerJoin(users, eq(appPasswords.userId, users.id))
-      .where(eq(appPasswords.tokenHash, hashToken(token)))
+      .where(
+        and(
+          eq(appPasswords.tokenHash, hashToken(token)),
+          email === undefined ? undefined : eq(users.email, email),
+        ),
+      )
       .get();
-    if (!row) throw new HttpError(401, "unauthenticated");
+    if (!row) return undefined;
     const current = now();
     db.update(appPasswords)
       .set({ lastUsedAt: new Date(current) })
@@ -109,7 +126,13 @@ export function createSessionService(opts: {
         ),
       )
       .run();
-    contexts.set(res, { via: "bearer", user: toUser(row.user), appPasswordId: row.id });
+    return { user: toUser(row.user), appPasswordId: row.id };
+  }
+
+  function authenticateBearer(token: string, res: Response): void {
+    const found = appPasswordUser(token);
+    if (!found) throw new HttpError(401, "unauthenticated");
+    contexts.set(res, { via: "bearer", user: found.user, appPasswordId: found.appPasswordId });
   }
 
   function authenticate(allowPending: boolean): RequestHandler {
@@ -203,6 +226,7 @@ export function createSessionService(opts: {
       service.clearCookie(res);
     },
 
+    appPasswordUser,
     requireUser: authenticate(false),
     requireUserOrPending: authenticate(true),
 
