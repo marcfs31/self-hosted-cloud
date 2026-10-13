@@ -484,12 +484,30 @@ first `docker compose up` (Caddy refuses to start without the files).
 ```bash
 cd deploy
 cp .env.example .env     # CLOUD_DOMAIN=localhost, CLOUD_VERSION=local, CLOUD_IMAGE_PREFIX=cloud
+openssl rand -base64 32  # paste as SECRET_KEY= in .env: compose refuses an empty one
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
 curl -k https://localhost/api/health
 ```
 
-The base file publishes 80/443 and mounts `/data`; use a third `-f` file to change ports or the
-data volume when the workstation already uses them. `deploy/scripts/validate-config.sh` checks
+The base file publishes 80/443 and mounts `/data`. When the workstation already uses those ports
+(Tailscale Serve on a Mac does) or has no `/data`, set `CLOUD_DOMAIN=localhost:8443` in `.env` and
+add a third file; the API's `PUBLIC_ORIGIN` follows `CLOUD_DOMAIN`, so sign-in still passes the
+same-origin check. `!override` replaces the base port list instead of adding to it:
+
+```yaml
+# workstation.yml, used as a third -f file
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:8443:8443"
+  api:
+    volumes:
+      - ${HOME}/cloud-local-data:/data
+```
+
+Caddy's root certificate is in the `caddy` container at
+`/data/caddy/pki/authorities/local/root.crt`; pass it to clients (`curl --cacert`, or
+`NODE_EXTRA_CA_CERTS` for the CLI) instead of turning verification off. `deploy/scripts/validate-config.sh` checks
 the Caddyfile (localhost, a `.ts.net` name with throw-away certificate files, and the refusal when
 the files are missing) and both compose files with nothing but Docker.
 
