@@ -4,16 +4,17 @@ Day-two runbook for the Pi: updates, rollback, backups, restore, monitoring. Set
 machine itself is in `pi-setup.md`. Everything below assumes the stack lives in `/opt/cloud`
 and the data disk is mounted at `/data`.
 
-| What                         | Where                                                                               |
-| ---------------------------- | ----------------------------------------------------------------------------------- |
-| Compose project, `.env`      | `/opt/cloud/`                                                                       |
-| Host scripts                 | `/opt/cloud/scripts/` (`backup.sh`, `restore-test.sh`, `health-check.sh`, `lib.sh`) |
-| systemd units                | `/etc/systemd/system/cloud-*.{service,timer}`                                       |
-| Restic repository settings   | `/etc/cloud/restic.env`, `/etc/cloud/restic-offsite.env`                            |
-| Restic passwords             | `/etc/cloud/restic*.pass` (mode 0600, **copied off the Pi**)                        |
-| Live data                    | `/data/files`, `/data/db`, `/data/tmp`, `/data/thumbs`                              |
-| Database snapshot for backup | `/data/backups/cloud.sqlite` (written by the API, never the live DB)                |
-| Status reports for dashboard | `/data/status/{backup,restore-test,health}.json` (written by the scripts)           |
+| What                         | Where                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Compose project, `.env`      | `/opt/cloud/`                                                                                        |
+| Host scripts                 | `/opt/cloud/scripts/` (`backup.sh`, `restore-test.sh`, `health-check.sh`, `renew-cert.sh`, `lib.sh`) |
+| TLS certificate for Caddy    | `/opt/cloud/tls/{cert.pem,key.pem}` (written by `cloud-tls.service`, key mode 0600)                  |
+| systemd units                | `/etc/systemd/system/cloud-*.{service,timer}`                                                        |
+| Restic repository settings   | `/etc/cloud/restic.env`, `/etc/cloud/restic-offsite.env`                                             |
+| Restic passwords             | `/etc/cloud/restic*.pass` (mode 0600, **copied off the Pi**)                                         |
+| Live data                    | `/data/files`, `/data/db`, `/data/tmp`, `/data/thumbs`                                               |
+| Database snapshot for backup | `/data/backups/cloud.sqlite` (written by the API, never the live DB)                                 |
+| Status reports for dashboard | `/data/status/{backup,restore-test,health}.json` (written by the scripts)                            |
 
 ## Update
 
@@ -162,7 +163,7 @@ only other copy with it.
 ```bash
 sudo cp /opt/cloud/systemd/cloud-*.service /opt/cloud/systemd/cloud-*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now cloud-backup.timer cloud-restore-test.timer cloud-health.timer
+sudo systemctl enable --now cloud-backup.timer cloud-restore-test.timer cloud-health.timer cloud-tls.timer
 systemctl list-timers 'cloud-*'
 ```
 
@@ -436,6 +437,50 @@ FolderSync (set the account type to WebDAV, server `<host>`, path `/dav/`, port 
   `Destination` host that is not this server (check the Host header Caddy forwards);
   `curl -u '<email>:<app password>' -X PROPFIND -H 'Depth: 1' https://<host>/dav/` is the
   quickest test from the Pi.
+
+## TLS certificate
+
+The `*.ts.net` certificate is not Caddy's business. `cloud-tls.timer` runs `cloud-tls.service`
+daily (randomised by up to an hour), which runs `/opt/cloud/scripts/renew-cert.sh` as root on the
+host:
+
+```bash
+tailscale cert --cert-file /opt/cloud/tls/cert.pem --key-file /opt/cloud/tls/key.pem <host>.<tailnet>.ts.net
+docker compose exec -T caddy caddy reload --force --config /etc/caddy/Caddyfile   # only if Caddy is running
+```
+
+`tailscale cert` returns the cached certificate until it is close to expiry, so the daily run is
+cheap. The reload needs `--force`: the Caddyfile text did not change, and a plain `caddy reload`
+then does nothing and keeps serving the old certificate. Caddy mounts `/opt/cloud/tls` read-only at `/tls` and the Caddyfile says
+`tls /tls/cert.pem /tls/key.pem`; the `tailscaled` socket is **not** mounted, because a container
+that can reach it controls the tailnet node.
+
+```bash
+systemctl list-timers cloud-tls.timer
+sudo systemctl start cloud-tls.service && journalctl -u cloud-tls.service -n 20 --no-pager
+sudo openssl x509 -in /opt/cloud/tls/cert.pem -noout -enddate
+```
+
+If the certificate expires (the timer stopped, the Pi was off for weeks) browsers show a
+certificate error; run the service by hand. After a replacement Pi, run `renew-cert.sh` before the
+first `docker compose up` (Caddy refuses to start without the files).
+
+## Local smoke test (workstation)
+
+`docker-compose.local.yml` swaps the Tailscale certificate for Caddy's internal CA
+(`CLOUD_TLS=internal`), for trying a build on a laptop:
+
+```bash
+cd deploy
+cp .env.example .env     # CLOUD_DOMAIN=localhost, CLOUD_VERSION=local, CLOUD_IMAGE_PREFIX=cloud
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
+curl -k https://localhost/api/health
+```
+
+The base file publishes 80/443 and mounts `/data`; use a third `-f` file to change ports or the
+data volume when the workstation already uses them. `deploy/scripts/validate-config.sh` checks
+the Caddyfile (localhost, a `.ts.net` name with throw-away certificate files, and the refusal when
+the files are missing) and both compose files with nothing but Docker.
 
 ## Logs and log rotation
 

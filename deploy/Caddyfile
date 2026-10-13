@@ -1,6 +1,9 @@
 # CLOUD_DOMAIN comes from the caddy container environment (deploy/.env).
-#   <host>.<tailnet>.ts.net  -> certificate from the host's tailscaled (socket mounted in compose)
-#   localhost                -> Caddy's internal CA (local smoke tests)
+#   <host>.<tailnet>.ts.net  -> certificate files /tls/cert.pem + /tls/key.pem, written on the host
+#                               by cloud-tls.service (`tailscale cert`) and mounted read-only. Caddy
+#                               never talks to tailscaled: that socket would hand the container
+#                               control of the tailnet node.
+#   localhost                -> docker-compose.local.yml sets CLOUD_TLS=internal (Caddy's own CA)
 
 {
 	# Pinned so the compose healthcheck can reach it; it is not published outside the container.
@@ -8,6 +11,8 @@
 }
 
 {$CLOUD_DOMAIN} {
+	tls {$CLOUD_TLS:/tls/cert.pem /tls/key.pem}
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"

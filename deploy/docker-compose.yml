@@ -36,8 +36,10 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-      # Lets Caddy fetch *.ts.net certificates from the host's tailscaled automatically.
-      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      # cert.pem + key.pem written by the host's cloud-tls.service (`tailscale cert`). Read-only,
+      # and the tailscaled socket is deliberately NOT mounted: it would give the container
+      # control of the tailnet node.
+      - ${CLOUD_TLS_DIR:-/opt/cloud/tls}:/tls:ro
     depends_on:
       web:
         condition: service_healthy

@@ -1,0 +1,11 @@
+[Unit]
+Description=Cloud TLS certificate (tailscale cert) and Caddy reload
+Wants=network-online.target
+After=tailscaled.service docker.service network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root on the host. Caddy gets the two files read-only and never touches tailscaled.
+# The domain comes from /opt/cloud/.env (CLOUD_DOMAIN); see deploy/scripts/renew-cert.sh.
+ExecStart=/opt/cloud/scripts/renew-cert.sh
+TimeoutStartSec=5min

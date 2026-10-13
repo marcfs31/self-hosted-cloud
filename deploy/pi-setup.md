@@ -150,9 +150,10 @@ Tailscale admin console (`login.tailscale.com/admin`):
 
 Install the Tailscale app on your phone and laptop and sign in to the same tailnet.
 
-Caddy gets its `*.ts.net` certificate from the host's `tailscaled` through its socket, which
-the compose file mounts (`/var/run/tailscale/tailscaled.sock`). Nothing is opened on the
-router; no public DNS record is needed.
+The `*.ts.net` certificate is fetched on the **host** by `tailscale cert` (section 9 installs
+`cloud-tls.service` and its daily timer) and handed to Caddy as two read-only files. Caddy never
+sees the `tailscaled` socket: mounting it would give the container control of the tailnet node.
+Nothing is opened on the router; no public DNS record is needed.
 
 ## 7. Data disk at `/data`
 
@@ -259,6 +260,16 @@ CLOUD_VERSION=0.2.0                                  # a published tag, without 
 CLOUD_IMAGE_PREFIX=ghcr.io/<owner>/self-hosted-cloud
 ```
 
+Fetch the certificate and install the daily renewal. Caddy cannot start without
+`/opt/cloud/tls/cert.pem` and `key.pem`, so do this before the first `docker compose up`:
+
+```bash
+sudo /opt/cloud/scripts/renew-cert.sh          # tailscale cert -> /opt/cloud/tls (key 0600)
+sudo cp /opt/cloud/systemd/cloud-tls.service /opt/cloud/systemd/cloud-tls.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloud-tls.timer
+```
+
 Images are pulled from GitHub Container Registry. Either make the two packages public
 (GitHub > Packages > `self-hosted-cloud-api` / `-web` > Package settings > Change
 visibility), or `sudo docker login ghcr.io` with a token that has only `read:packages`.
@@ -270,8 +281,10 @@ sudo docker compose up -d
 sudo docker compose ps          # api, web, caddy: all "healthy" after about a minute
 ```
 
-The first start has Caddy request the certificate; `sudo docker compose logs caddy` shows
-it. Expect `certificate obtained successfully` for your `.ts.net` name.
+Caddy loads the certificate files from `/opt/cloud/tls`; `sudo docker compose logs caddy` shows
+`skipping automatic certificate management because one or more matching certificates are already
+loaded` for your `.ts.net` name. `cloud-tls.timer` renews the certificate daily (Tailscale only
+issues a new one when the old one is close to expiry) and runs `caddy reload` afterwards.
 
 ## 10. Verify
 
@@ -295,10 +308,11 @@ Finish with backups and monitoring: `operations.md`, sections "Backups" and "Mon
 
 ## Troubleshooting
 
-| Symptom                                   | Check                                                                                      |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Caddy cannot get a certificate            | HTTPS certificates enabled in the tailnet; `/var/run/tailscale/tailscaled.sock` exists     |
-| `docker compose` says `set CLOUD_VERSION` | `/opt/cloud/.env` missing or the command ran in another directory                          |
-| `api` unhealthy, `storage":"unavailable"` | `/data` not mounted or not owned by 1000:1000 (`ls -ln /data`)                             |
-| `pull access denied`                      | GHCR package is private and the Pi is not logged in, or `CLOUD_IMAGE_PREFIX` has uppercase |
-| Docker will not start after reboot        | `/data` failed to mount (`systemctl status data.mount`); the drop-in is doing its job      |
+| Symptom                                    | Check                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Caddy will not start, `open /tls/cert.pem` | `sudo /opt/cloud/scripts/renew-cert.sh` has not run (or failed); `ls -l /opt/cloud/tls`    |
+| `renew-cert.sh` fails                      | HTTPS certificates enabled in the tailnet; `tailscale status`; `journalctl -u cloud-tls`   |
+| `docker compose` says `set CLOUD_VERSION`  | `/opt/cloud/.env` missing or the command ran in another directory                          |
+| `api` unhealthy, `storage":"unavailable"`  | `/data` not mounted or not owned by 1000:1000 (`ls -ln /data`)                             |
+| `pull access denied`                       | GHCR package is private and the Pi is not logged in, or `CLOUD_IMAGE_PREFIX` has uppercase |
+| Docker will not start after reboot         | `/data` failed to mount (`systemctl status data.mount`); the drop-in is doing its job      |

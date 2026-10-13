@@ -1,0 +1,18 @@
+# Local smoke test on a workstation: Caddy's internal CA instead of the host's Tailscale
+# certificate files.
+#
+#   CLOUD_DOMAIN=localhost CLOUD_VERSION=local CLOUD_IMAGE_PREFIX=cloud \
+#     docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#   curl -k https://localhost/api/health
+#
+# Ports 80/443 and /data are the production defaults: override them in a further -f file when
+# the workstation already uses them (see "Local smoke test" in operations.md).
+
+services:
+  caddy:
+    environment:
+      CLOUD_TLS: internal
+    volumes:
+      # Replaces the /tls bind mount of the base file (same target): nothing to read here.
+      - type: tmpfs
+        target: /tls
