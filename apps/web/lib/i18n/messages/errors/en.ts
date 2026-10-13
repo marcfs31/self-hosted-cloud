@@ -17,6 +17,8 @@ export const en: Record<ErrorCode, string> = {
   invalid_move: "That item can't be moved or changed this way.",
   quota_exceeded: "There isn't enough space left in your storage for this.",
   version_is_current: "This is the current version. Restore another version first.",
+  mfa_required: "Enter the code from your authenticator app to continue.",
+  invalid_code: "That code didn't work. Check it and try again.",
   internal: "Something went wrong on our side. Please try again in a moment.",
 };
 
