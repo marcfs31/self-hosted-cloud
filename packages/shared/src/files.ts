@@ -18,6 +18,9 @@ import { z } from "zod";
  *                                        Content-Security-Policy: sandbox; default-src 'none';
  *                                        img-src 'self'; media-src 'self'; style-src 'unsafe-inline'.
  *   GET    /usage                      → UsageResponse
+ *   POST   /files/exists               ExistsRequest → ExistsResponse: which of the given SHA-256
+ *                                        hashes already exist as any version of an active file
+ *                                        of the user (used by phone photo backup to skip duplicates)
  *
  * Version history (files only; every upload or replace adds a version):
  *   GET    /files/:id/versions                      → VersionListing (newest first)
@@ -166,3 +169,11 @@ export function uniqueName(name: string, taken: ReadonlySet<string>): string {
     if (!taken.has(candidate)) return candidate;
   }
 }
+
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/);
+
+export const existsRequest = z.object({ sha256s: z.array(sha256Hex).min(1).max(1000) });
+export type ExistsRequest = z.input<typeof existsRequest>;
+
+export const existsResponse = z.object({ existing: z.array(sha256Hex) });
+export type ExistsResponse = z.infer<typeof existsResponse>;
