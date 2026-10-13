@@ -370,14 +370,28 @@ test("iPhone Safari gets an install hint that stays dismissed", async ({ browser
 });
 
 /**
- * What Chromium does when the app becomes installable. The event is only heard once React has
- * hydrated the page (the server-rendered HTML shows before that), so wait for that first.
+ * Init script: counts the page's live `beforeinstallprompt` listeners. The install bar adds its
+ * listener in an effect, which runs after hydration, so hydration alone does not mean it listens.
  */
+function countInstallListeners() {
+  const counter = window as unknown as { installListeners: number };
+  counter.installListeners = 0;
+  const counted =
+    (original: EventTarget["addEventListener"], step: number) =>
+    (...args: Parameters<EventTarget["addEventListener"]>) => {
+      if (args[0] === "beforeinstallprompt") counter.installListeners += step;
+      original(...args);
+    };
+  Object.assign(window, {
+    addEventListener: counted(window.addEventListener.bind(window), 1),
+    removeEventListener: counted(window.removeEventListener.bind(window), -1),
+  });
+}
+
+/** What Chromium does when the app becomes installable, once the install bar listens for it. */
 async function fireInstallPrompt(target: Page) {
-  await target.waitForFunction(() =>
-    Array.from(document.body.querySelectorAll("*")).some((element) =>
-      Object.keys(element).some((key) => key.startsWith("__reactFiber")),
-    ),
+  await target.waitForFunction(
+    () => (window as unknown as { installListeners: number }).installListeners > 0,
   );
   await target.evaluate(() => {
     window.dispatchEvent(
@@ -396,6 +410,7 @@ test("other browsers see no iOS hint, and Chromium's install prompt becomes a bu
   browser,
 }) => {
   const fresh = await browser.newContext({ baseURL: origin });
+  await fresh.addInitScript(countInstallListeners);
   try {
     const freshPage = await fresh.newPage();
     const install = freshPage.getByRole("button", { name: "Install app" });
