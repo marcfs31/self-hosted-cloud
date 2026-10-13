@@ -60,8 +60,8 @@ test("setup creates the admin and signs them in", async ({ page }) => {
   await page.getByRole("button", { name: "Create admin account" }).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText(`Signed in as ${ADMIN.email}`)).toBeVisible();
-  await expect(page.getByText("File browsing arrives in the next release.")).toBeVisible();
+  await expect(page.getByText(ADMIN.email)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My files", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
   await expectNoViolations(page);
 });
@@ -114,7 +114,8 @@ test("a member registers from the invite link and has no admin access", async ({
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText(`Signed in as ${MEMBER.email}`)).toBeVisible();
+  await expect(page.getByText(MEMBER.email)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My files", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
 
   await page.goto("/admin");
