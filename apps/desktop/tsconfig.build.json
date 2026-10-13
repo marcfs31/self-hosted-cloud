@@ -6,5 +6,6 @@
     "outDir": "dist",
     "customConditions": []
   },
-  "exclude": ["src/**/*.test.ts", "src/testing"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/testing", "src/renderer"]
 }

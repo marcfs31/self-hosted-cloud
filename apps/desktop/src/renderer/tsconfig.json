@@ -1,0 +1,14 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "legacy",
+    "customConditions": [],
+    "rootDir": "..",
+    "outDir": "../../dist"
+  },
+  "include": ["."]
+}

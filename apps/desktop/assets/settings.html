@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Cloud</title>
+    <link rel="stylesheet" href="settings.css" />
+    <script src="../dist/renderer/renderer.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1 data-i18n="heading"></h1>
+      <p class="lead" data-i18n="intro"></p>
+
+      <p class="status" role="status">
+        <span class="visually-hidden" data-i18n="statusLabel"></span>
+        <span id="status-dot" class="dot" data-state="unconfigured" aria-hidden="true"></span>
+        <span id="status-text"></span>
+      </p>
+
+      <form id="form" novalidate>
+        <p id="form-error" class="error" role="alert" hidden></p>
+
+        <div class="field">
+          <label for="server" data-i18n="serverLabel"></label>
+          <input
+            id="server"
+            name="server"
+            type="text"
+            inputmode="url"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-describedby="server-hint server-error"
+          />
+          <p id="server-hint" class="hint" data-i18n="serverHint"></p>
+          <p id="server-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="email" data-i18n="emailLabel"></label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-describedby="email-error"
+          />
+          <p id="email-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="appPassword" data-i18n="passwordLabel"></label>
+          <input
+            id="appPassword"
+            name="appPassword"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="appPassword-hint appPassword-error"
+          />
+          <p id="appPassword-hint" class="hint"></p>
+          <p id="appPassword-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="localFolder" data-i18n="folderLabel"></label>
+          <div class="row">
+            <input
+              id="localFolder"
+              name="localFolder"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="localFolder-error"
+            />
+            <button id="choose" type="button" class="secondary" data-i18n="folderChoose"></button>
+          </div>
+          <p id="localFolder-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="deviceName" data-i18n="deviceLabel"></label>
+          <input
+            id="deviceName"
+            name="deviceName"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="deviceName-hint deviceName-error"
+          />
+          <p id="deviceName-hint" class="hint" data-i18n="deviceHint"></p>
+          <p id="deviceName-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field check">
+          <input id="launchAtLogin" name="launchAtLogin" type="checkbox" />
+          <label for="launchAtLogin" data-i18n="launchLabel"></label>
+        </div>
+
+        <p id="result" class="result" role="status" data-kind="neutral"></p>
+
+        <div class="actions">
+          <button id="test" type="button" class="secondary" data-i18n="testButton"></button>
+          <button id="save" type="submit" class="primary" data-i18n="saveButton"></button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
