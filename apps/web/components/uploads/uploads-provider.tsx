@@ -23,7 +23,8 @@ interface UploadsContext {
   items: readonly UploadItem[];
   /** Counts finished uploads, so a listing can refresh when it changes. */
   completed: number;
-  enqueue: (entries: readonly UploadRequestEntry[], parentId: string) => void;
+  /** Returns the queue IDs of the new uploads, in the order of `entries`. */
+  enqueue: (entries: readonly UploadRequestEntry[], parentId: string) => string[];
   pause: (id: string) => void;
   resume: (id: string) => void;
   cancel: (id: string) => void;
@@ -80,21 +81,25 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     }
   }, [state.items]);
 
-  const enqueue = useCallback((entries: readonly UploadRequestEntry[], parentId: string) => {
-    const uploads = entries.map((entry) => {
-      counter.current += 1;
-      const id = `upload-${Date.now().toString(36)}-${counter.current}`;
-      files.current.set(id, entry.file);
-      return {
-        id,
-        name: entry.file.name,
-        size: entry.file.size,
-        parentId,
-        replaceId: entry.replaceId,
-      };
-    });
-    dispatch({ type: "add", uploads });
-  }, []);
+  const enqueue = useCallback(
+    (entries: readonly UploadRequestEntry[], parentId: string): string[] => {
+      const uploads = entries.map((entry) => {
+        counter.current += 1;
+        const id = `upload-${Date.now().toString(36)}-${counter.current}`;
+        files.current.set(id, entry.file);
+        return {
+          id,
+          name: entry.file.name,
+          size: entry.file.size,
+          parentId,
+          replaceId: entry.replaceId,
+        };
+      });
+      dispatch({ type: "add", uploads });
+      return uploads.map((upload) => upload.id);
+    },
+    [],
+  );
 
   const pause = useCallback((id: string) => {
     handles.current.get(id)?.pause();
