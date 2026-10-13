@@ -14,17 +14,48 @@
 # snapshot legitimately make it differ.
 #
 # Env: RESTORE_TEST_BASE (scratch parent, default /data/tmp), RESTORE_TEST_CHECK_SUBSET
-#      (restic check --read-data-subset, default 5%).
+#      (restic check --read-data-subset, default 5%), CLOUD_STATUS_DIR (default $DATA_DIR/status).
+#
+# Every run, successful or not, ends by writing restore-test.json for the admin dashboard
+# (see lib.sh). It is ok only when the verdict is PASS (exit 0). Facts:
+#   integrity   ok | failed | not-run      (PRAGMA integrity_check of the restored database)
+#   files       <restored>/<listed>, or "not-run"   (restored file count / snapshot listing)
+# If the report cannot be written the script exits non-zero even though the test ran.
 set -euo pipefail
+
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 ENV_FILE="${1:-/etc/cloud/restic.env}"
 COMPOSE_FILE="${CLOUD_COMPOSE_FILE:-/opt/cloud/docker-compose.yml}"
 DATA_DIR="${CLOUD_DATA_DIR:-/data}"
+STATUS_DIR="${CLOUD_STATUS_DIR:-${DATA_DIR}/status}"
 BASE="${RESTORE_TEST_BASE:-${DATA_DIR}/tmp}"
 SUBSET="${RESTORE_TEST_CHECK_SUBSET:-5%}"
 
 log() { printf '%s restore-test: %s\n' "$(date -Is)" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
+
+work=""
+fact_integrity="not-run"
+fact_files="not-run"
+
+# EXIT trap: removes the scratch directory, then publishes the report on every exit path
+# (PASS, FAIL, die, or a command killed by set -e).
+on_exit() {
+  local rc=$?
+  trap - EXIT
+  [ -z "${work}" ] || find "${work}" -delete
+  local ok=false
+  [ "${rc}" -eq 0 ] && ok=true
+  if ! write_report "${STATUS_DIR}/restore-test.json" "${ok}" \
+    "integrity=${fact_integrity}" "files=${fact_files}"; then
+    log "ERROR: could not write the dashboard report" >&2
+    rc=1
+  fi
+  exit "${rc}"
+}
+trap on_exit EXIT
 
 command -v restic >/dev/null || die "restic is not installed"
 [ -r "${ENV_FILE}" ] || die "cannot read env file: ${ENV_FILE}"
@@ -45,7 +76,6 @@ case "${work}" in
   "${BASE}"/restore-test.*) ;;
   *) die "unexpected scratch path: ${work}" ;;
 esac
-trap 'find "${work}" -delete' EXIT
 
 failures=()
 fail() { log "FAIL: $*" >&2; failures+=("$*"); }
@@ -80,6 +110,7 @@ fi
 db_dir="${work}${DATA_DIR}/backups"
 db="${db_dir}/cloud.sqlite"
 if [ ! -s "${db}" ]; then
+  fact_integrity="failed"
   fail "restored database snapshot missing or empty: ${db}"
 else
   verdict=""
@@ -96,7 +127,12 @@ else
     fi
   fi
   log "PRAGMA integrity_check: ${verdict}"
-  [ "${verdict}" = "ok" ] || fail "database integrity_check: ${verdict}"
+  if [ "${verdict}" = "ok" ]; then
+    fact_integrity="ok"
+  else
+    fact_integrity="failed"
+    fail "database integrity_check: ${verdict}"
+  fi
 fi
 
 # --- 5. file counts
@@ -108,13 +144,13 @@ if [ -d "${work}${DATA_DIR}/files" ]; then
 fi
 live="$(find "${DATA_DIR}/files" -type f 2>/dev/null | wc -l | tr -d ' ')"
 log "files: snapshot lists ${listed}, restored ${restored}, live now ${live} (informational)"
+fact_files="${restored}/${listed}"
 [ "${restored}" -eq "${listed}" ] || fail "restored file count ${restored} != snapshot listing ${listed}"
 
 # --- verdict
-if [ "${#failures[@]}" -eq 0 ]; then
-  log "VERDICT: PASS"
-  exit 0
+if [ "${#failures[@]}" -gt 0 ]; then
+  log "VERDICT: FAIL (${#failures[@]} problem(s))" >&2
+  for f in "${failures[@]}"; do log "  - ${f}" >&2; done
+  exit 1
 fi
-log "VERDICT: FAIL (${#failures[@]} problem(s))" >&2
-for f in "${failures[@]}"; do log "  - ${f}" >&2; done
-exit 1
+log "VERDICT: PASS"
