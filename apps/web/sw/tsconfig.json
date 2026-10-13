@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker"],
+    "types": [],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "rootDir": ".",
+    "outDir": "../public",
+    "noEmitOnError": true
+  },
+  "include": ["sw.ts", "sw-shared.ts"]
+}

@@ -29,6 +29,11 @@ import * as trashPtPT from "./trash/pt-PT";
 import * as trashEs from "./trash/es";
 import * as trashCa from "./trash/ca";
 import * as trashIt from "./trash/it";
+import * as pwaEn from "./pwa/en";
+import * as pwaPtPT from "./pwa/pt-PT";
+import * as pwaEs from "./pwa/es";
+import * as pwaCa from "./pwa/ca";
+import * as pwaIt from "./pwa/it";
 
 /** One entry per namespace. A new namespace adds a key here and one line per locale below. */
 export interface Messages {
@@ -38,6 +43,7 @@ export interface Messages {
   errors: errorsEn.Errors;
   files: filesEn.Files;
   trash: trashEn.Trash;
+  pwa: pwaEn.Pwa;
 }
 
 export const MESSAGES: Record<Locale, Messages> = {
@@ -48,6 +54,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEn.en,
     files: filesEn.en,
     trash: trashEn.en,
+    pwa: pwaEn.en,
   },
   "pt-PT": {
     common: commonPtPT.ptPT,
@@ -56,6 +63,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsPtPT.ptPT,
     files: filesPtPT.ptPT,
     trash: trashPtPT.ptPT,
+    pwa: pwaPtPT.ptPT,
   },
   es: {
     common: commonEs.es,
@@ -64,6 +72,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsEs.es,
     files: filesEs.es,
     trash: trashEs.es,
+    pwa: pwaEs.es,
   },
   ca: {
     common: commonCa.ca,
@@ -72,6 +81,7 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsCa.ca,
     files: filesCa.ca,
     trash: trashCa.ca,
+    pwa: pwaCa.ca,
   },
   it: {
     common: commonIt.it,
@@ -80,5 +90,6 @@ export const MESSAGES: Record<Locale, Messages> = {
     errors: errorsIt.it,
     files: filesIt.it,
     trash: trashIt.it,
+    pwa: pwaIt.it,
   },
 };

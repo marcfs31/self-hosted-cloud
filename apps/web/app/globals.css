@@ -278,6 +278,7 @@ input[readonly] {
 
 .nav-list {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -718,4 +719,37 @@ td > .badge-expired {
     margin-block-start: var(--space-1);
     box-shadow: none;
   }
+}
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.summary {
+  font-weight: 600;
+}
+
+/* Install, iOS hint and update notices: stuck to the foot of the screen, never over the content. */
+.pwa-bar {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 5;
+  padding: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.pwa-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  max-inline-size: 64rem;
+  margin-inline: auto;
+}
+
+.pwa-notice + .pwa-notice {
+  margin-block-start: var(--space-2);
 }
