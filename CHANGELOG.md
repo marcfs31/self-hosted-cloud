@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-13
+
+### Added
+
+- Photos timeline grouped by month, ordered by the date each photo was taken (read from the
+  photo itself, falling back to the upload date), with a lightbox and video playback.
+- Albums: create, rename, add a selection of photos, remove photos, delete (photos stay in your
+  files).
+- Thumbnails for images and videos, generated on the server and cached.
+
+### Changed
+
+- The api image now includes ffmpeg for video thumbnails.
+
 ## [0.7.0] - 2026-10-13
 
 ### Added
