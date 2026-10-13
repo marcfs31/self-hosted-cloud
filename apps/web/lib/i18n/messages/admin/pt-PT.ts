@@ -8,6 +8,8 @@ export const ptPT: Admin = {
     email: "E-mail",
     role: "Função",
     quota: "Quota (GiB)",
+    used: "Armazenamento utilizado",
+    usedOf: (used, quota) => `${used} de ${quota}`,
     created: "Data de criação",
     actions: "Ações",
     you: "Eu",

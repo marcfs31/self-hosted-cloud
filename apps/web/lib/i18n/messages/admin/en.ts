@@ -8,6 +8,8 @@ export const en = {
     email: "Email",
     role: "Role",
     quota: "Quota (GiB)",
+    used: "Storage used",
+    usedOf: (used: string, quota: string) => `${used} of ${quota}`,
     created: "Created",
     actions: "Actions",
     you: "You",

@@ -8,6 +8,8 @@ export const es: Admin = {
     email: "Correo electrónico",
     role: "Rol",
     quota: "Cuota (GiB)",
+    used: "Almacenamiento en uso",
+    usedOf: (used, quota) => `${used} de ${quota}`,
     created: "Fecha de creación",
     actions: "Acciones",
     you: "Tú",

@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
-import type { ErrorCode, ListUsersResponse, Role, UpdateUserRequest, User } from "@cloud/shared";
+import type {
+  ErrorCode,
+  ListUsersResponse,
+  Role,
+  UpdateUserRequest,
+  User,
+  UserSummary,
+} from "@cloud/shared";
 import { apiFetch, errorCodeOf } from "../../lib/api";
 import { parseGiB, toGiBInput } from "../../lib/i18n/format";
 import { useFormat, useT } from "../../lib/i18n/provider";
@@ -15,7 +22,7 @@ function UserRow({
   isSelf,
   onSaved,
 }: {
-  user: User;
+  user: UserSummary;
   isSelf: boolean;
   onSaved: (user: User) => void;
 }) {
@@ -113,6 +120,9 @@ function UserRow({
           />
         )}
       </td>
+      <td data-label={t.used}>
+        {t.usedOf(format.bytes(user.usedBytes), format.bytes(user.quotaBytes))}
+      </td>
       <td data-label={t.created}>{format.date(user.createdAt)}</td>
       <td data-label={t.actions}>
         {isSelf ? null : (
@@ -140,7 +150,7 @@ function UserRow({
 export function UsersSection({ me }: { me: User }) {
   const all = useT();
   const t = all.admin.users;
-  const [users, setUsers] = useState<User[] | null>(null);
+  const [users, setUsers] = useState<UserSummary[] | null>(null);
   const [loadError, setLoadError] = useState<ErrorCode | null>(null);
 
   useEffect(() => {
@@ -180,6 +190,7 @@ export function UsersSection({ me }: { me: User }) {
               <th scope="col">{t.email}</th>
               <th scope="col">{t.role}</th>
               <th scope="col">{t.quota}</th>
+              <th scope="col">{t.used}</th>
               <th scope="col">{t.created}</th>
               <th scope="col">{t.actions}</th>
             </tr>
@@ -192,7 +203,8 @@ export function UsersSection({ me }: { me: User }) {
                 isSelf={u.id === me.id}
                 onSaved={(updated) => {
                   setUsers(
-                    (current) => current?.map((x) => (x.id === updated.id ? updated : x)) ?? null,
+                    (current) =>
+                      current?.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) ?? null,
                   );
                 }}
               />
