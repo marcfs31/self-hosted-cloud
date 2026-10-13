@@ -1,0 +1,107 @@
+import type { Dictionary } from "./en.js";
+
+export const ptPT: Dictionary = {
+  tray: {
+    tooltip: "Cloud: {status}",
+    statusIdle: "Tudo atualizado",
+    statusSyncing: "A sincronizar…",
+    statusSyncingOne: "A sincronizar 1 ficheiro",
+    statusSyncingMany: "A sincronizar {count} ficheiros",
+    statusPaused: "Em pausa",
+    statusOffline: "Sem ligação",
+    statusError: "Erro: {reason}",
+    statusNotConfigured: "Ainda não configurado",
+    openFolder: "Abrir a pasta da cloud",
+    openBrowser: "Abrir no navegador",
+    pause: "Pausar a sincronização",
+    resume: "Retomar a sincronização",
+    settings: "Definições…",
+    quit: "Sair do Cloud",
+  },
+  notifications: {
+    conflictOneTitle: "Ambas as versões foram guardadas",
+    conflictOneBody: "{name} foi alterado em dois computadores. Há uma cópia junto ao original.",
+    conflictManyTitle: "{count} ficheiros alterados em dois sítios",
+    conflictManyBody:
+      "Foram guardadas as duas versões de cada ficheiro. Procure as cópias junto aos originais.",
+    problemTitle: "A sincronização precisa de atenção",
+    problemBody: "{reason}",
+    problemItemsBody: "Não foi possível sincronizar {count} itens. {reason}",
+  },
+  reasons: {
+    unauthenticated:
+      "O servidor não aceitou a palavra-passe da aplicação. Introduza uma nova nas Definições.",
+    account_changed:
+      "Esta pasta foi sincronizada com outra conta. Escolha outra pasta nas Definições.",
+    local_root_missing:
+      "A pasta da cloud não foi encontrada. Volte a ligar a unidade ou escolha a pasta de novo.",
+    config_damaged:
+      "Não foi possível ler as definições guardadas. Introduza-as de novo nas Definições.",
+    credentials_unreadable:
+      "Não foi possível desbloquear a palavra-passe guardada. Introduza-a de novo nas Definições.",
+    quota_exceeded: "O espaço da sua cloud está cheio.",
+    case_collision: "Dois nomes diferem apenas em maiúsculas e minúsculas.",
+    invalid_name: "O nome não é permitido no servidor.",
+    name_conflict: "Já existe um item com esse nome.",
+    changed_during_sync: "O ficheiro foi alterado durante a sincronização.",
+    too_many_attempts: "Demasiadas tentativas. A sincronização vai tentar de novo daqui a pouco.",
+    origin_rejected: "O servidor recusou o pedido.",
+    internal: "O servidor teve um problema. A sincronização vai tentar de novo.",
+    EACCES: "Sem permissão para usar o ficheiro.",
+    EPERM: "Sem permissão para usar o ficheiro.",
+    ENOSPC: "O disco está cheio.",
+    EBUSY: "O ficheiro está a ser usado por outro programa.",
+    unknown: "Aconteceu algo inesperado.",
+  },
+  settings: {
+    windowTitle: "Definições do Cloud",
+    heading: "Ligue-se à sua cloud",
+    intro: "Os ficheiros da pasta abaixo ficam sincronizados com o seu próprio servidor.",
+    statusLabel: "Estado",
+    serverLabel: "Endereço do servidor",
+    serverHint: "Por exemplo https://cloud.exemplo.pt. O http simples só é aceite para localhost.",
+    emailLabel: "E-mail",
+    passwordLabel: "Palavra-passe da aplicação",
+    passwordHint:
+      "Crie uma na aplicação web, em Segurança. Fica guardada cifrada pelo sistema e nunca volta a ser mostrada.",
+    passwordSaved: "Já existe uma palavra-passe guardada. Deixe vazio para a manter.",
+    folderLabel: "Pasta local",
+    folderChoose: "Escolher…",
+    deviceLabel: "Nome do dispositivo",
+    deviceHint: "Serve para dar nome às cópias de conflito, para saber que computador as criou.",
+    launchLabel: "Abrir o Cloud ao iniciar sessão",
+    testButton: "Testar ligação",
+    saveButton: "Guardar",
+    testing: "A testar…",
+    saving: "A guardar…",
+    saved: "Definições guardadas.",
+    unexpected: "Aconteceu algo inesperado. Tente de novo.",
+    validation: {
+      invalid_input: "Alguns valores não são válidos.",
+      server_required: "Introduza o endereço do servidor.",
+      server_invalid:
+        "Esse endereço de servidor não é válido. Use a forma https://cloud.exemplo.pt.",
+      server_insecure: "Use https://. O http simples só é aceite para localhost.",
+      email_invalid: "Introduza um endereço de e-mail válido.",
+      password_required: "Introduza a palavra-passe da aplicação.",
+      secure_storage_unavailable:
+        "Este computador não consegue cifrar segredos (não há porta-chaves do sistema), por isso a palavra-passe da aplicação não é guardada.",
+      folder_required: "Escolha uma pasta.",
+      folder_not_absolute: "Escolha o caminho completo de uma pasta.",
+      folder_unsafe: "Escolha uma pasta própria, não a pasta pessoal nem a raiz de uma unidade.",
+      folder_unusable: "Não foi possível criar ou abrir a pasta.",
+      device_name_required: "Introduza um nome para o dispositivo.",
+      device_name_too_long: "Use no máximo 64 carateres.",
+      save_failed: "Não foi possível guardar as definições.",
+    },
+    connection: {
+      ok: "Ligado como {email}.",
+      unauthenticated: "O servidor não aceitou esta palavra-passe da aplicação.",
+      email_mismatch:
+        "Esta palavra-passe da aplicação pertence a {email}, e não ao e-mail introduzido.",
+      network: "Não foi possível contactar o servidor. Verifique o endereço e a sua ligação.",
+      server_error: "O servidor respondeu com um erro. Tente de novo dentro de momentos.",
+      bad_response: "Esse endereço não parece ser de um servidor Cloud.",
+    },
+  },
+};
