@@ -4,6 +4,7 @@ import express from "express";
 import type { HealthResponse } from "@cloud/shared";
 import { createActivityRouter } from "./activity/routes.js";
 import { createAdminRouter } from "./admin/routes.js";
+import { createChangesRouter } from "./changes/routes.js";
 import { createAppPasswordRouter } from "./auth/app-passwords.js";
 import { createMfaRouter } from "./auth/mfa-routes.js";
 import { createPasskeyRouter } from "./auth/passkeys.js";
@@ -99,6 +100,7 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
   app.use("/api", createAlbumsRouter({ db, sessions, now }));
   app.use("/api/public/shares", publicShares.router);
   app.use("/api", createSharesRouter({ db, sessions, now }));
+  app.use("/api/changes", createChangesRouter({ db, sessions, now }));
   app.use("/api/search", createSearchRouter({ db, sessions }));
   app.use("/api", createFilesRouter({ db, sessions, config, now }));
   app.use("/api", notFoundHandler);

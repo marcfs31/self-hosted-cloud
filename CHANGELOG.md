@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-13
+
+### Added
+
+- The activity log now also records uploads (including drop-box uploads), moves to the trash,
+  restores, permanent deletes (marked when done by the 30-day clean-up) and share links
+  created or revoked.
+- Change feed (`GET /api/changes`) for sync clients: each changed item's latest state since a
+  cursor, usable with an app password. Existing files are included from the first sync.
+
 ## [0.11.0] - 2026-10-13
 
 ### Added

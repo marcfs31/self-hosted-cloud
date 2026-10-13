@@ -1,0 +1,21 @@
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { users } from "./auth.js";
+
+/*
+ * The change feed (GET /api/changes): one row per mutation of an item, appended in the same
+ * transaction as the mutation. The feed reads only the latest row per file_id, so repeated edits
+ * collapse into one entry. file_id is deliberately not a foreign key: a purged item keeps its
+ * rows, which is how clients learn it is gone.
+ */
+export const changes = sqliteTable(
+  "changes",
+  {
+    seq: integer("seq").primaryKey({ autoIncrement: true }),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("changes_owner_seq_idx").on(t.ownerId, t.seq)],
+);
