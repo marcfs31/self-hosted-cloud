@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
+import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { errorResponse, usageResponse } from "@cloud/shared";
 import { DROP_BOX_IDLE_MS } from "../files/in-flight.js";
 import { DROP_BOX_BUDGET_BYTES } from "../files/uploads.js";
 import { ORIGIN, binary, harness, type Harness } from "../testing/harness.js";
+import { DROP_BOX_CREATE_PER_IP, DROP_BOX_CREATE_PER_SHARE } from "./public.js";
 import { createLink, grantCookie, visitor, type Link } from "../testing/shares.js";
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -412,5 +414,116 @@ describe("drop box: guards", () => {
     expect((await visitor(h, durable).tusCreate({ filename: "x.bin" }, 1)).status).toBe(404);
     await a.post(`/api/trash/${inbox.id}/restore`);
     expect((await visitor(h, durable).tusCreate({ filename: "x.bin" }, 1)).status).toBe(201);
+  });
+});
+
+describe("drop box: flooding", () => {
+  /** A tus creation from a given visitor address (the app trusts one proxy hop). */
+  function createFrom(h: Harness, link: Link, ip: string, filename: string, length: number) {
+    return request(h.app)
+      .post(`${link.base}/uploads`)
+      .set("Origin", ORIGIN)
+      .set("X-Forwarded-For", ip)
+      .set("Tus-Resumable", "1.0.0")
+      .set("Upload-Length", String(length))
+      .set("Upload-Metadata", `filename ${Buffer.from(filename).toString("base64")}`);
+  }
+
+  it("allows 100 creations per visitor address and share per hour, empty files included", async () => {
+    const h = harness();
+    const { a, inbox, drop } = await setup(h);
+    const { max } = DROP_BOX_CREATE_PER_IP;
+    expect(max).toBe(100);
+    for (let i = 0; i < max; i++) {
+      const res = await createFrom(h, drop, "198.51.100.7", `empty-${String(i)}.txt`, 0);
+      expect(res.status, String(i)).toBe(201);
+    }
+    const flooded = await createFrom(h, drop, "198.51.100.7", "one-too-many.txt", 0);
+    expect([flooded.status, code(flooded)]).toEqual([429, "too_many_attempts"]);
+    const listing = await a.folder(inbox.id);
+    expect(listing.children).toHaveLength(max);
+    expect(listing.children.map((c) => c.name)).not.toContain("one-too-many.txt");
+
+    // Another address is unaffected, and so is the same address on another share.
+    expect((await createFrom(h, drop, "198.51.100.8", "other-visitor.txt", 0)).status).toBe(201);
+    const otherBox = await createLink(a, {
+      fileId: (await a.mkdir(inbox.id, "Second")).id,
+      allowUpload: true,
+    });
+    expect((await createFrom(h, otherBox, "198.51.100.7", "other-box.txt", 0)).status).toBe(201);
+
+    // The window slides: an hour later the address may upload again.
+    h.clock.t += DROP_BOX_CREATE_PER_IP.windowMs + 1000;
+    expect((await createFrom(h, drop, "198.51.100.7", "later.txt", 0)).status).toBe(201);
+  });
+
+  it("counts refused creations too, but never the follow-up requests of an upload", async () => {
+    const h = harness();
+    const { drop } = await setup(h);
+    const first = await createFrom(h, drop, "198.51.100.9", "keep.bin", 4);
+    expect(first.status).toBe(201);
+    const location = first.get("Location") ?? "";
+    for (let i = 1; i < DROP_BOX_CREATE_PER_IP.max; i++) {
+      const bad = await createFrom(h, drop, "198.51.100.9", "a/b.bin", 4);
+      expect([bad.status, code(bad)], String(i)).toEqual([400, "invalid_request"]);
+    }
+    const blocked = await createFrom(h, drop, "198.51.100.9", "late.bin", 4);
+    expect([blocked.status, code(blocked)]).toEqual([429, "too_many_attempts"]);
+
+    // HEAD and PATCH of the upload that already exists are not creations.
+    const v = visitor(h, drop);
+    expect((await v.tusHead(location)).status).toBe(200);
+    const done = await v.tusPatch(location, 0, Buffer.from("abcd"));
+    expect(done.status).toBe(204);
+  });
+
+  it("allows 1000 creations per share per day across all addresses", async () => {
+    const h = harness();
+    const { a, inbox, drop } = await setup(h);
+    const { max } = DROP_BOX_CREATE_PER_SHARE;
+    expect(max).toBe(1000);
+    // Ten visitors make a hundred creations each, every one within its own hourly allowance.
+    // Ten per visitor are real (empty) files; the rest are refused ones, which count as well.
+    const realPerVisitor = 10;
+    for (let visitorNo = 0; visitorNo < max / DROP_BOX_CREATE_PER_IP.max; visitorNo++) {
+      const ip = `203.0.113.${String(visitorNo + 1)}`;
+      for (let i = 0; i < DROP_BOX_CREATE_PER_IP.max; i++) {
+        const real = i < realPerVisitor;
+        const name = real ? `v${String(visitorNo)}-${String(i)}.txt` : "not/a/name";
+        const res = await createFrom(h, drop, ip, name, 0);
+        const expected = real ? 201 : 400;
+        if (res.status !== expected)
+          throw new Error(`${ip} #${String(i)} got ${String(res.status)}`);
+      }
+    }
+    const stranger = await createFrom(h, drop, "203.0.113.200", "stranger.txt", 0);
+    expect([stranger.status, code(stranger)]).toEqual([429, "too_many_attempts"]);
+    // A refusal by the share limit did not use up the stranger's own allowance...
+    h.clock.t += DROP_BOX_CREATE_PER_IP.windowMs + 1000;
+    const stillBlocked = await createFrom(h, drop, "203.0.113.200", "stranger.txt", 0);
+    expect(stillBlocked.status).toBe(429);
+    expect((await a.folder(inbox.id)).children).toHaveLength(100);
+
+    // ...and a day after the first creation the share takes uploads again.
+    h.clock.t += DROP_BOX_CREATE_PER_SHARE.windowMs;
+    expect((await createFrom(h, drop, "203.0.113.200", "stranger.txt", 0)).status).toBe(201);
+  }, 60_000);
+
+  it("a locked drop box cannot be used up by visitors who never unlocked it", async () => {
+    const h = harness();
+    const { a, inbox } = await setup(h);
+    const locked = await createLink(a, {
+      fileId: inbox.id,
+      allowUpload: true,
+      password: "hunter2hunter2",
+    });
+    for (let i = 0; i < DROP_BOX_CREATE_PER_IP.max + 5; i++) {
+      const res = await createFrom(h, locked, "198.51.100.50", `x${String(i)}.txt`, 0);
+      expect(res.status, String(i)).toBe(401);
+    }
+    const cookie = grantCookie(await visitor(h, locked).unlock("hunter2hunter2"));
+    expect((await visitor(h, locked, cookie).tusCreate({ filename: "ok.txt" }, 0)).status).toBe(
+      201,
+    );
   });
 });
