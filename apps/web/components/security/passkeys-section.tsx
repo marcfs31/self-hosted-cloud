@@ -131,7 +131,7 @@ export function PasskeysSection() {
           requiredMessage={t.nameRequired}
           submitLabel={t.continue}
           submittingLabel={t.waiting}
-          onSubmit={async (name, fail) => {
+          onSubmit={async (name, stepUp, fail) => {
             const optionsJSON = await apiFetch<PublicKeyCredentialCreationOptionsJSON>(
               "/auth/passkeys/register/options",
               { method: "POST" },
@@ -146,7 +146,7 @@ export function PasskeysSection() {
               }
               return;
             }
-            const body: RegisterPasskeyRequest = { name, response: { ...response } };
+            const body: RegisterPasskeyRequest = { name, ...stepUp, response: { ...response } };
             const created = await apiFetch<Passkey>("/auth/passkeys/register/verify", {
               method: "POST",
               json: body,

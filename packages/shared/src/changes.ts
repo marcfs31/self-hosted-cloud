@@ -16,6 +16,9 @@ import { fileNode } from "./files.js";
  * No cursor = from the beginning (a full snapshot of active items as upserts, no deletes).
  * Clients apply pages in order and persist `cursor` after each page; `hasMore` means fetch again
  * immediately. Cursors never expire; an unknown or malformed cursor → 400 invalid_request.
+ * The cursor is opaque. It encodes a position in the user's own sequence (1..n, no gaps), never a
+ * number shared with other users, so it says nothing about anyone else's activity. Cursors issued
+ * by servers before 0.17 (a global counter) are still accepted and replaced by the next page's.
  */
 
 export const changesQuery = z.object({

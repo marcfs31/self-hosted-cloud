@@ -14,6 +14,7 @@ import {
 } from "@cloud/shared";
 import { createApp } from "../app.js";
 import type { Config } from "../config.js";
+import { TEST_SECRET_KEY } from "../testing/secret-key.js";
 import { openDatabase } from "../db/client.js";
 import { invites, sessions, users } from "../db/schema/index.js";
 
@@ -29,6 +30,7 @@ function harness(overrides: Partial<Config> = {}) {
     port: 0,
     dataDir: mkdtempSync(join(tmpdir(), "cloud-auth-")),
     publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
     ...overrides,
   };
   const app = createApp({ config, version: "0.0.0", db, now: () => clock.t });

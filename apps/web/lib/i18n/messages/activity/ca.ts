@@ -30,6 +30,7 @@ export const ca: Activity = {
     totp_enabled: "Verificació en dos passos activada",
     totp_disabled: "Verificació en dos passos desactivada",
     mfa_reset_by_admin: "Verificació en dos passos restablerta per un administrador",
+    password_changed: "Contrasenya canviada",
     app_password_created: "Contrasenya d'aplicació creada",
     app_password_revoked: "Contrasenya d'aplicació revocada",
     upload: "Fitxer pujat",

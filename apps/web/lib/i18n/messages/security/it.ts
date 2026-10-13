@@ -140,6 +140,38 @@ export const it: Security = {
     revoking: "Revoca in corso…",
     revoked: (name) => `Password per l'app «${name}» revocata.`,
   },
+  stepUp: {
+    intro: "Per proteggere il tuo account, conferma che sei tu prima di continuare.",
+    loading: "Caricamento…",
+    passwordRequired: "Inserisci la tua password.",
+    codeLabel: "Codice dell'app o codice di recupero",
+    codeHint:
+      "Le 6 cifre che la tua app di autenticazione mostra in questo momento. Va bene anche un codice di recupero.",
+    codeRequired: "Inserisci il codice della tua app di autenticazione.",
+    wrongPassword: "Questa password non è corretta. Controllala e riprova.",
+  },
+  password: {
+    title: "La tua password",
+    intro:
+      "Scegli una nuova password. Qui resterai connesso, mentre tutti gli altri dispositivi verranno disconnessi.",
+    currentLabel: "Password attuale",
+    newLabel: "Nuova password",
+    submit: "Cambia password",
+    submitting: "Cambio in corso…",
+    done: "Password cambiata. Gli altri dispositivi sono stati disconnessi.",
+  },
+  sessions: {
+    title: "Dispositivi connessi",
+    intro:
+      "Hai fatto l'accesso da un posto che non usi più o hai perso un dispositivo? Esci da tutti gli altri dispositivi. Qui resterai connesso.",
+    button: "Esci dagli altri dispositivi",
+    confirmTitle: "Uscire dagli altri dispositivi?",
+    confirmBody:
+      "Tutti gli altri browser e dispositivi verranno disconnessi subito e dovranno chiedere di nuovo la tua password. Le password per le app continuano a funzionare.",
+    confirmSubmit: "Esci",
+    confirming: "Uscita in corso…",
+    done: "Tutti gli altri dispositivi sono stati disconnessi.",
+  },
   admin: {
     resetMfa: "Reimposta la verifica in due passaggi",
     resetMfaFor: (email) => `Reimposta la verifica in due passaggi di ${email}`,

@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { getRoot } from "../../lib/files-api";
 import { useFormat, useT } from "../../lib/i18n/provider";
-import { clearShared, loadShared, sharedFilesSupported } from "../../lib/share-store";
+import {
+  clearShared,
+  loadShared,
+  pruneSharedFiles,
+  sharedFilesSupported,
+} from "../../lib/share-store";
 import { isShareId } from "../../sw/sw-shared";
 import { useForm } from "../../lib/use-form";
 import { FolderPickerDialog } from "../files/folder-picker-dialog";
@@ -51,18 +56,21 @@ export function ShareTargetView({ shareId }: { shareId: string | null }) {
       setShared({ status: "empty" });
       return;
     }
-    loadShared(shareId).then(
-      (files) => {
-        if (!stale) {
-          setShared(files.length === 0 ? { status: "empty" } : { status: "ready", files });
-        }
-      },
-      () => {
-        if (!stale) {
-          setShared({ status: "empty" });
-        }
-      },
-    );
+    pruneSharedFiles()
+      .catch(() => undefined)
+      .then(() => loadShared(shareId))
+      .then(
+        (files) => {
+          if (!stale) {
+            setShared(files.length === 0 ? { status: "empty" } : { status: "ready", files });
+          }
+        },
+        () => {
+          if (!stale) {
+            setShared({ status: "empty" });
+          }
+        },
+      );
     return () => {
       stale = true;
     };

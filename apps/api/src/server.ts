@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { purgeOldActivity } from "./activity/retention.js";
 import { createApp } from "./app.js";
+import { sealLegacyTotpSecrets } from "./auth/secret-box.js";
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/client.js";
 import { purgeExpiredTrash } from "./files/trash.js";
@@ -12,6 +14,9 @@ const { version } = JSON.parse(
 
 const config = loadConfig(process.env);
 const db = openDatabase(join(config.dataDir, "db", "cloud.sqlite"));
+// TOTP seeds written before SECRET_KEY existed are sealed now, in one transaction.
+const sealed = sealLegacyTotpSecrets(db, config.secretKey);
+if (sealed > 0) console.log(`sealed ${sealed} legacy TOTP secret(s)`);
 const app = createApp({ config, version, db });
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -22,6 +27,11 @@ const maintenance = setInterval(() => {
   purgeExpiredTrash({ db, dataDir: config.dataDir, now: Date.now }).catch((err: unknown) => {
     console.error("trash sweep failed:", err instanceof Error ? err.name : "unknown");
   });
+  try {
+    purgeOldActivity(db, Date.now);
+  } catch (err) {
+    console.error("activity retention failed:", err instanceof Error ? err.name : "unknown");
+  }
 }, HOUR_MS);
 maintenance.unref();
 

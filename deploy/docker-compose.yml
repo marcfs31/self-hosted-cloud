@@ -90,6 +90,8 @@ services:
       NODE_ENV: production
       DATA_DIR: /data
       PUBLIC_ORIGIN: https://${CLOUD_DOMAIN:?set CLOUD_DOMAIN}
+      # openssl rand -base64 32; kept in /opt/cloud/.env, never under /data (see pi-setup.md).
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (openssl rand -base64 32)}
     expose:
       - "4000"
     volumes:

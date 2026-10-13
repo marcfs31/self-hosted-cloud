@@ -8,6 +8,7 @@ import { createdAppPasswordResponse, createdInviteResponse, meResponse } from "@
 import { createApp } from "../../../api/src/app.js";
 import type { Config } from "../../../api/src/config.js";
 import { openDatabase } from "../../../api/src/db/client.js";
+import { TEST_SECRET_KEY } from "../../../api/src/testing/secret-key.js";
 import type { InStream, Io } from "../io.js";
 import { run } from "../run.js";
 
@@ -33,7 +34,13 @@ export interface LiveApi {
 /** The real API (real SQLite, real blob storage in a temp dir) listening on a free port. */
 export async function startApi(): Promise<LiveApi> {
   const dataDir = mkdtempSync(join(tmpdir(), "cloud-cli-api-"));
-  const config: Config = { production: false, port: 0, dataDir, publicOrigin: ORIGIN };
+  const config: Config = {
+    production: false,
+    port: 0,
+    dataDir,
+    publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
+  };
   const db = openDatabase(join(dataDir, "db", "cloud.sqlite"));
   const app = createApp({ config, version: "0.0.0", db });
   let patches = 0;
@@ -62,7 +69,7 @@ export async function startApi(): Promise<LiveApi> {
 
   const created = await session("/api/auth/app-passwords", {
     method: "POST",
-    body: { name: "cli tests" },
+    body: { name: "cli tests", password: PASSWORD },
   });
   if (created.status !== 201) throw new Error(`app password failed: ${created.status}`);
   const { token } = createdAppPasswordResponse.parse(await created.json());
@@ -86,7 +93,7 @@ export async function startApi(): Promise<LiveApi> {
     const made = await fetch(`${base}/api/auth/app-passwords`, {
       method: "POST",
       headers: { Origin: ORIGIN, Cookie: memberCookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "cli tests" }),
+      body: JSON.stringify({ name: "cli tests", password: PASSWORD }),
     });
     return { id: user.id, token: createdAppPasswordResponse.parse(await made.json()).token };
   }

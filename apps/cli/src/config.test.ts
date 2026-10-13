@@ -38,6 +38,15 @@ describe("stored config", () => {
     expect(await loadConfig(env)).toBeNull();
   });
 
+  it("refuses a stored plain-http server that is not this machine", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cloud-cfg-"));
+    const env = io({ CLOUD_CONFIG_DIR: dir });
+    await saveConfig(env, { server: "http://cloud.example.com", email: "a@b.c", token: "t" });
+    await expect(loadConfig(env)).rejects.toMatchObject({ exitCode: 1, message: /https:\/\// });
+    await saveConfig(env, { server: "http://127.0.0.1:3000", email: "a@b.c", token: "t" });
+    expect((await loadConfig(env))?.server).toBe("http://127.0.0.1:3000");
+  });
+
   it("treats a damaged file as an error, not as logged out", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cloud-cfg-"));
     mkdirSync(dir, { recursive: true });

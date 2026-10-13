@@ -12,10 +12,16 @@ import { meResponse } from "./auth.js";
  *   POST /auth/login/totp   TotpLoginRequest → MeResponse (6-digit code, ±1 step, or a one-time
  *     recovery code; wrong → 401 invalid_code; rate-limited → 429 too_many_attempts)
  *
+ * Step-up re-authentication: registering a passkey and creating an app password (the two ways to
+ * get a new long-lived credential) need the current password in the request body, plus a current
+ * TOTP code (or recovery code) in `code` when the user has two-step verification on. A wrong
+ * password answers 401 invalid_credentials, a missing or wrong code 401 invalid_code; guesses
+ * share one limiter (per user and per address) and answer 429 too_many_attempts.
+ *
  * Passkeys (WebAuthn via @simplewebauthn; RP ID = hostname of PUBLIC_ORIGIN, origin = PUBLIC_ORIGIN;
  * challenges are single-use and expire after 5 minutes):
  *   POST   /auth/passkeys/register/options → WebAuthn creation options JSON (session)
- *   POST   /auth/passkeys/register/verify  RegisterPasskeyRequest → Passkey (201)
+ *   POST   /auth/passkeys/register/verify  RegisterPasskeyRequest → Passkey (201; step-up)
  *   GET    /auth/passkeys                  → PasskeyList
  *   DELETE /auth/passkeys/:id              → 204
  *   POST   /auth/passkeys/login/options    → WebAuthn request options JSON (public, discoverable)
@@ -32,12 +38,17 @@ import { meResponse } from "./auth.js";
  *
  * App passwords (for CLI, WebDAV, desktop sync):
  *   GET    /auth/app-passwords             → AppPasswordList
- *   POST   /auth/app-passwords             CreateAppPasswordRequest → CreatedAppPasswordResponse (201; token once)
+ *   POST   /auth/app-passwords             CreateAppPasswordRequest → CreatedAppPasswordResponse (201; token once; step-up)
  *   DELETE /auth/app-passwords/:id         → 204
  *   Use: `Authorization: Bearer <token>` on /api/*. Bearer requests are exempt from the Origin
  *   check (no cookies involved) but can never reach /auth/* (except GET /auth/me) or /admin/* —
  *   those answer 404 not_found. Tokens look like `cloud_<43 base64url chars>`; stored as SHA-256;
  *   lastUsedAt updated at most once a minute.
+ *
+ * Sessions and password (cookie sessions only):
+ *   POST   /auth/sessions/revoke-others    → 204 (ends every other session of the caller: "sign out everywhere else")
+ *   POST   /auth/password                  ChangePasswordRequest → 204 (wrong current password → 401
+ *            invalid_credentials; rate-limited like step-up; ends every OTHER session; logs password_changed)
  *
  * Activity log (append-only; written in the same transaction as the action it records):
  *   GET    /activity?cursor=&limit=        → ActivityPage (own events, newest first)
@@ -47,6 +58,12 @@ import { meResponse } from "./auth.js";
 export const loginResponse = z.union([meResponse, z.object({ mfaRequired: z.literal(true) })]);
 export type LoginResponse = z.infer<typeof loginResponse>;
 
+/** Step-up fields: the current password, and a current second-factor code when one is set up. */
+export const stepUpFields = {
+  password: z.string().min(1).max(1024),
+  code: z.string().trim().min(6).max(32).optional(),
+};
+
 export const totpLoginRequest = z.object({ code: z.string().trim().min(6).max(32) });
 export type TotpLoginRequest = z.input<typeof totpLoginRequest>;
 
@@ -54,6 +71,7 @@ export const passkeyName = z.string().trim().min(1).max(60);
 
 export const registerPasskeyRequest = z.object({
   name: passkeyName,
+  ...stepUpFields,
   /** RegistrationResponseJSON from @simplewebauthn/browser, validated by the server library. */
   response: z.record(z.string(), z.unknown()),
 });
@@ -108,7 +126,10 @@ export type AppPassword = z.infer<typeof appPassword>;
 export const appPasswordList = z.object({ appPasswords: z.array(appPassword) });
 export type AppPasswordList = z.infer<typeof appPasswordList>;
 
-export const createAppPasswordRequest = z.object({ name: z.string().trim().min(1).max(60) });
+export const createAppPasswordRequest = z.object({
+  name: z.string().trim().min(1).max(60),
+  ...stepUpFields,
+});
 export type CreateAppPasswordRequest = z.input<typeof createAppPasswordRequest>;
 
 export const createdAppPasswordResponse = z.object({ appPassword, token: z.string() });
@@ -123,6 +144,7 @@ export const activityType = z.enum([
   "totp_enabled",
   "totp_disabled",
   "mfa_reset_by_admin",
+  "password_changed",
   "app_password_created",
   "app_password_revoked",
   "upload",
@@ -143,6 +165,7 @@ export const SECURITY_ACTIVITY_TYPES: readonly ActivityType[] = [
   "totp_enabled",
   "totp_disabled",
   "mfa_reset_by_admin",
+  "password_changed",
   "app_password_created",
   "app_password_revoked",
 ];

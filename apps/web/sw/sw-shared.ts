@@ -37,6 +37,30 @@ export function shareKeyPrefix(id: string): string {
   return `${SHARE_KEY_PREFIX}${id}/`;
 }
 
+/** The slice of `Cache` that pruneShares needs; the real Cache fits with K = Request. */
+export interface ShareCacheLike<K> {
+  keys(): Promise<readonly K[]>;
+  match(key: K): Promise<{ headers: { get(name: string): string | null } } | undefined>;
+  delete(key: K): Promise<unknown>;
+}
+
+/**
+ * Deletes the shared files nobody uploaded within SHARE_MAX_AGE_MS. An entry whose time header
+ * is missing or unreadable cannot be aged, so it goes too. Returns how many entries it removed.
+ */
+export async function pruneShares<K>(cache: ShareCacheLike<K>, now: number): Promise<number> {
+  let removed = 0;
+  for (const key of await cache.keys()) {
+    const header = (await cache.match(key))?.headers.get(SHARE_TIME_HEADER) ?? null;
+    const sharedAt = header === null || header === "" ? Number.NaN : Number(header);
+    if (!Number.isFinite(sharedAt) || now - sharedAt > SHARE_MAX_AGE_MS) {
+      await cache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 /**
  * What the service worker does with a request. Nothing under /api is ever cached (file contents
  * and listings are private and must be fresh), and anything not listed goes straight to the

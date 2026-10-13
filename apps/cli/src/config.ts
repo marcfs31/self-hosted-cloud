@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { CliError } from "./errors.js";
+import { CliError, usageError } from "./errors.js";
 import type { Io } from "./io.js";
 
 export interface StoredConfig {
@@ -22,6 +22,27 @@ export function configDir(io: ConfigEnv): string {
 
 export function configFile(io: ConfigEnv): string {
   return join(configDir(io), "config.json");
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The app password travels in every request, so plain http is only allowed to this machine.
+ * Throws a usage error (exit 1) for any other http:// address.
+ */
+export function assertSecureServer(server: string): void {
+  let url: URL;
+  try {
+    url = new URL(server);
+  } catch {
+    throw usageError(`Not a valid server address: ${server}`);
+  }
+  if (url.protocol === "http:" && !LOCAL_HOSTS.has(url.hostname)) {
+    throw usageError(
+      `Refusing to use ${server}: the app password would cross the network unencrypted. ` +
+        `Use an https:// address (plain http:// is only allowed for localhost, 127.0.0.1 and [::1]).`,
+    );
+  }
 }
 
 function isStoredConfig(value: unknown): value is StoredConfig {
@@ -49,6 +70,7 @@ export async function loadConfig(io: ConfigEnv): Promise<StoredConfig | null> {
   if (!isStoredConfig(parsed)) {
     throw new CliError(`The configuration file ${file} is damaged. Run 'cloud login' again.`);
   }
+  assertSecureServer(parsed.server);
   return { server: parsed.server, email: parsed.email, token: parsed.token };
 }
 

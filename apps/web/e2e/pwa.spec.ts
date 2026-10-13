@@ -244,9 +244,9 @@ for (const locale of ["en", "ca"] as const) {
 }
 
 /** What the service worker stores for a share-sheet POST (see sw/sw.ts), put there by hand. */
-async function seedShare(id: string, files: { name: string; content: string }[]) {
+async function seedShare(id: string, files: { name: string; content: string }[], ageMs = 0) {
   await page.evaluate(
-    async ({ id: shareId, shared }) => {
+    async ({ id: shareId, shared, age }) => {
       const cache = await caches.open("cloud-share");
       let index = 0;
       for (const file of shared) {
@@ -256,14 +256,14 @@ async function seedShare(id: string, files: { name: string; content: string }[])
             headers: {
               "content-type": "text/plain",
               "x-file-name": encodeURIComponent(file.name),
-              "x-shared-at": String(Date.now()),
+              "x-shared-at": String(Date.now() - age),
             },
           }),
         );
         index += 1;
       }
     },
-    { id, shared: files },
+    { id, shared: files, age: ageMs },
   );
 }
 
@@ -325,6 +325,30 @@ test("shared files can be discarded", async () => {
   expect(left).toBe(0);
 });
 
+test("shared files nobody uploaded are forgotten after a day, when the page opens", async () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const stale = "3c2f8a10-7d4e-4b19-a6c5-1e9b0d7f4a22";
+  const other = "7e4b1d93-2a6c-4f08-8b3d-5c9a1e0f6b44";
+  const fresh = "d1a5c7e2-9b3f-4a60-8e17-2f4c6b8d0a93";
+  await page.goto("/backup");
+  await seedShare(stale, [{ name: "stale.txt", content: "old" }], DAY_MS + 60_000);
+  await seedShare(other, [{ name: "other.txt", content: "old" }], 3 * DAY_MS);
+  await seedShare(fresh, [{ name: "fresh.txt", content: "new" }], DAY_MS - 60_000);
+
+  // Opening an old share finds nothing, and opening any share clears the other old ones.
+  await page.goto(`/share-target?id=${stale}`);
+  await expect(page.getByText("Nothing to upload here")).toBeVisible();
+  const kept = await page.evaluate(async () => {
+    const cache = await caches.open("cloud-share");
+    return (await cache.keys()).map((request) => new URL(request.url).pathname);
+  });
+  expect(kept).toEqual([`/share-target-files/${fresh}/0`]);
+
+  await page.goto(`/share-target?id=${fresh}`);
+  await expect(page.getByText("1 file ready to upload")).toBeVisible();
+  await page.getByRole("button", { name: "Discard" }).click();
+});
+
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
@@ -345,8 +369,16 @@ test("iPhone Safari gets an install hint that stays dismissed", async ({ browser
   }
 });
 
-/** What Chromium does when the app becomes installable. */
+/**
+ * What Chromium does when the app becomes installable. The event is only heard once React has
+ * hydrated the page (the server-rendered HTML shows before that), so wait for that first.
+ */
 async function fireInstallPrompt(target: Page) {
+  await target.waitForFunction(() =>
+    Array.from(document.body.querySelectorAll("*")).some((element) =>
+      Object.keys(element).some((key) => key.startsWith("__reactFiber")),
+    ),
+  );
   await target.evaluate(() => {
     window.dispatchEvent(
       Object.assign(new Event("beforeinstallprompt", { cancelable: true }), {

@@ -258,7 +258,24 @@ sudo nano .env
 CLOUD_DOMAIN=<host>.<tailnet>.ts.net
 CLOUD_VERSION=0.2.0                                  # a published tag, without the "v"
 CLOUD_IMAGE_PREFIX=ghcr.io/<owner>/self-hosted-cloud
+SECRET_KEY=<output of the command below>
 ```
+
+`SECRET_KEY` is required: the API refuses to start without it. It encrypts everyone's
+two-step-verification secrets in the database. Generate it once and paste it into `.env`:
+
+```bash
+openssl rand -base64 32
+```
+
+Treat it like a password. It lives in `/opt/cloud/.env`, **not** under `/data`, so the restic
+backups of `/data` do not contain it (a backup that held both the database and its key would
+defeat the encryption). Copy it to a password manager now. Never change it afterwards: if it
+is lost or replaced, every account with two-step verification can no longer pass it and an
+admin has to reset it per user (Admin > Users > Reset two-step verification); passwords,
+passkeys and files are unaffected. When restoring onto a new Pi, put the same `SECRET_KEY` in
+the new `.env`. When upgrading an install that already uses two-step verification, add the
+key before bumping `CLOUD_VERSION`: the first start encrypts the existing secrets in place.
 
 Fetch the certificate and install the daily renewal. Caddy cannot start without
 `/opt/cloud/tls/cert.pem` and `key.pem`, so do this before the first `docker compose up`:
@@ -313,6 +330,7 @@ Finish with backups and monitoring: `operations.md`, sections "Backups" and "Mon
 | Caddy will not start, `open /tls/cert.pem` | `sudo /opt/cloud/scripts/renew-cert.sh` has not run (or failed); `ls -l /opt/cloud/tls`    |
 | `renew-cert.sh` fails                      | HTTPS certificates enabled in the tailnet; `tailscale status`; `journalctl -u cloud-tls`   |
 | `docker compose` says `set CLOUD_VERSION`  | `/opt/cloud/.env` missing or the command ran in another directory                          |
+| `docker compose` says `set SECRET_KEY`     | Add `SECRET_KEY=` with the output of `openssl rand -base64 32` to `/opt/cloud/.env`        |
 | `api` unhealthy, `storage":"unavailable"`  | `/data` not mounted or not owned by 1000:1000 (`ls -ln /data`)                             |
 | `pull access denied`                       | GHCR package is private and the Pi is not logged in, or `CLOUD_IMAGE_PREFIX` has uppercase |
 | Docker will not start after reboot         | `/data` failed to mount (`systemctl status data.mount`); the drop-in is doing its job      |

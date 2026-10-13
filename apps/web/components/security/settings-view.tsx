@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useT } from "../../lib/i18n/provider";
 import { AppPasswordsSection } from "./app-passwords-section";
 import { PasskeysSection } from "./passkeys-section";
+import { PasswordSection } from "./password-section";
+import { SessionsSection } from "./sessions-section";
 import { TotpSection } from "./totp-section";
 
 export function SettingsView() {
@@ -15,9 +17,11 @@ export function SettingsView() {
       <p>
         <Link href="/activity">{t.activityLink}</Link>
       </p>
+      <PasswordSection />
       <PasskeysSection />
       <TotpSection />
       <AppPasswordsSection />
+      <SessionsSection />
     </>
   );
 }

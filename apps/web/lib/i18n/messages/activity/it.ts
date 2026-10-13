@@ -28,6 +28,7 @@ export const it: Activity = {
     totp_enabled: "Verifica in due passaggi attivata",
     totp_disabled: "Verifica in due passaggi disattivata",
     mfa_reset_by_admin: "Verifica in due passaggi reimpostata da un amministratore",
+    password_changed: "Password cambiata",
     app_password_created: "Password per app creata",
     app_password_revoked: "Password per app revocata",
     upload: "File caricato",

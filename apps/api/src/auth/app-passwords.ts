@@ -12,6 +12,7 @@ import type { Db } from "../db/client.js";
 import { appPasswords } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { authOf, type SessionService } from "./sessions.js";
+import type { StepUp } from "./step-up.js";
 import { hashToken } from "./tokens.js";
 
 export function newAppPasswordToken(): string {
@@ -30,9 +31,10 @@ function toAppPassword(row: typeof appPasswords.$inferSelect): AppPassword {
 export function createAppPasswordRouter(opts: {
   db: Db;
   sessions: SessionService;
+  stepUp: StepUp;
   now: () => number;
 }): Router {
-  const { db, sessions, now } = opts;
+  const { db, sessions, stepUp, now } = opts;
   const router = Router();
   router.use(sessions.requireUser);
 
@@ -47,9 +49,10 @@ export function createAppPasswordRouter(opts: {
     res.json(body);
   });
 
-  router.post("/", (req, res) => {
-    const { name } = createAppPasswordRequest.parse(req.body);
+  router.post("/", async (req, res) => {
+    const { name, password, code } = createAppPasswordRequest.parse(req.body);
     const userId = authOf(res).user.id;
+    await stepUp.verify(userId, req.ip, { password, code });
     const token = newAppPasswordToken();
     const row = db.transaction((tx) => {
       const created = tx

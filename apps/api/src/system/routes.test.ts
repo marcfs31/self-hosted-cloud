@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { createdInviteResponse, systemStatus } from "@cloud/shared";
 import { createApp } from "../app.js";
 import { openDatabase } from "../db/client.js";
+import { TEST_SECRET_KEY } from "../testing/secret-key.js";
 
 const ORIGIN = "http://localhost:3000";
 const PASSWORD = "correct horse battery";
@@ -13,7 +14,13 @@ const PASSWORD = "correct horse battery";
 function harness() {
   const dataDir = mkdtempSync(join(tmpdir(), "cloud-system-"));
   const app = createApp({
-    config: { production: false, port: 0, dataDir, publicOrigin: ORIGIN },
+    config: {
+      production: false,
+      port: 0,
+      dataDir,
+      publicOrigin: ORIGIN,
+      secretKey: TEST_SECRET_KEY,
+    },
     version: "7.8.9",
     db: openDatabase(":memory:"),
   });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  SHARE_MAX_AGE_MS,
+  SHARE_TIME_HEADER,
   isShareId,
+  pruneShares,
   routeOf,
   shareKey,
   shareKeyPrefix,
@@ -107,5 +110,59 @@ describe("staticAssetsOf", () => {
 
   it("finds nothing in a page without build files", () => {
     expect(staticAssetsOf("<p>/static/nope</p>")).toEqual([]);
+  });
+});
+
+describe("pruneShares", () => {
+  const NOW = Date.parse("2026-10-13T12:00:00Z");
+
+  /** A Cache with just what pruneShares uses: entries keyed by name, each with a time header. */
+  function fakeCache(entries: Record<string, string | undefined>) {
+    const left = new Map(Object.entries(entries));
+    return {
+      left,
+      keys: () => Promise.resolve([...left.keys()]),
+      match: (key: string) =>
+        Promise.resolve(
+          left.has(key)
+            ? {
+                headers: {
+                  get: (name: string) =>
+                    name === SHARE_TIME_HEADER ? (left.get(key) ?? null) : null,
+                },
+              }
+            : undefined,
+        ),
+      delete: (key: string) => Promise.resolve(left.delete(key)),
+    };
+  }
+
+  const at = (msAgo: number) => String(NOW - msAgo);
+
+  it("deletes entries older than 24 hours and keeps newer ones", async () => {
+    const cache = fakeCache({
+      old: at(SHARE_MAX_AGE_MS + 1),
+      "very-old": at(30 * SHARE_MAX_AGE_MS),
+      fresh: at(SHARE_MAX_AGE_MS - 1),
+      "just-now": at(0),
+    });
+    expect(await pruneShares(cache, NOW)).toBe(2);
+    expect([...cache.left.keys()].sort()).toEqual(["fresh", "just-now"]);
+  });
+
+  it("keeps an entry exactly 24 hours old", async () => {
+    const cache = fakeCache({ edge: at(SHARE_MAX_AGE_MS) });
+    expect(await pruneShares(cache, NOW)).toBe(0);
+    expect(cache.left.size).toBe(1);
+  });
+
+  it("deletes entries without a usable time, since their age cannot be shown", async () => {
+    const cache = fakeCache({ missing: undefined, garbage: "yesterday", empty: "" });
+    expect(await pruneShares(cache, NOW)).toBe(3);
+    expect(cache.left.size).toBe(0);
+  });
+
+  it("does nothing to an empty cache", async () => {
+    expect(await pruneShares(fakeCache({}), NOW)).toBe(0);
   });
 });

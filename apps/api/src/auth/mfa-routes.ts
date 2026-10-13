@@ -15,6 +15,7 @@ import { recoveryCodes, sessions, totp, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { verifyPassword } from "./passwords.js";
 import { createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
+import { openSecret, sealSecret } from "./secret-box.js";
 import {
   consumeSecondFactor,
   recoveryCodesLeft,
@@ -34,8 +35,9 @@ export function createMfaRouter(opts: {
   db: Db;
   sessions: SessionService;
   now: () => number;
+  secretKey: Buffer;
 }): Router {
-  const { db, sessions: sessionService, now } = opts;
+  const { db, sessions: sessionService, now, secretKey } = opts;
   const limiter = createRateLimiter({ ...FAILURE_LIMIT, now });
   const router = Router();
 
@@ -55,7 +57,7 @@ export function createMfaRouter(opts: {
     });
 
     const result = db.transaction((tx) => {
-      const method = consumeSecondFactor(tx, user.id, code, now());
+      const method = consumeSecondFactor(tx, user.id, code, now(), secretKey);
       if (!method) return null;
       // Rotate: the pending token is deleted and a fresh one issued (session fixation).
       tx.delete(sessions).where(eq(sessions.tokenHash, session.tokenHash)).run();
@@ -103,11 +105,12 @@ export function createMfaRouter(opts: {
     const { id, email } = authOf(res).user;
     if (totpEnabled(db, id)) throw new HttpError(409, "invalid_request");
     const secret = generateSecret();
+    const sealed = sealSecret(secretKey, secret);
     db.insert(totp)
-      .values({ userId: id, secret })
+      .values({ userId: id, secret: sealed })
       .onConflictDoUpdate({
         target: totp.userId,
-        set: { secret, enabledAt: null, lastUsedStep: null },
+        set: { secret: sealed, enabledAt: null, lastUsedStep: null },
       })
       .run();
     const body: TotpSetupResponse = { secret, otpauthUrl: otpauthUrl(email, secret) };
@@ -127,7 +130,7 @@ export function createMfaRouter(opts: {
       .where(and(eq(totp.userId, id), isNull(totp.enabledAt)))
       .get();
     if (!pending) throw new HttpError(409, "invalid_request");
-    const step = verifyTotp(pending.secret, code, now(), null);
+    const step = verifyTotp(openSecret(secretKey, pending.secret), code, now(), null);
     if (step === null) {
       keys.forEach((key) => {
         limiter.fail(key);
@@ -176,7 +179,7 @@ export function createMfaRouter(opts: {
       throw new HttpError(401, "invalid_credentials");
     }
     const disabled = db.transaction((tx) => {
-      if (!consumeSecondFactor(tx, id, code, now())) return false;
+      if (!consumeSecondFactor(tx, id, code, now(), secretKey)) return false;
       tx.delete(totp).where(eq(totp.userId, id)).run();
       tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, id)).run();
       recordActivity(tx, { userId: id, type: "totp_disabled", ip: req.ip, at: now() });

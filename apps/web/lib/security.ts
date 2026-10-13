@@ -8,6 +8,15 @@ export function compactCode(code: string): string {
   return code.replace(/\s+/g, "");
 }
 
+/** The step-up part of a request body: the password, and the code only when the account has one. */
+export function stepUpFields(
+  password: string,
+  code: string,
+  totpEnabled: boolean,
+): { password: string; code?: string } {
+  return totpEnabled ? { password, code: compactCode(code) } : { password };
+}
+
 export const RECOVERY_FILE_NAME = "cloud-recovery-codes.txt";
 
 /** The text of the downloadable recovery-code file: a heading, a blank line, one code per line. */

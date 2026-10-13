@@ -20,6 +20,8 @@ const TOTP_USER = { email: "totp-user@example.test", password: PASSWORD };
 const PASSKEY_USER = { email: "passkey-user@example.test", password: PASSWORD };
 const TOKEN_USER = { email: "token-user@example.test", password: PASSWORD };
 const LOST_PHONE_USER = { email: "lost-phone@example.test", password: PASSWORD };
+const SESSION_USER = { email: "session-user@example.test", password: PASSWORD };
+const NEW_PASSWORD = "a different long passphrase";
 
 type Account = { email: string; password: string };
 
@@ -151,7 +153,7 @@ async function readSecret(dialog: Locator): Promise<string> {
 
 test.beforeAll(async ({ playwright }, testInfo) => {
   const baseURL = String(testInfo.project.use.baseURL);
-  for (const account of [TOTP_USER, PASSKEY_USER, TOKEN_USER]) {
+  for (const account of [TOTP_USER, PASSKEY_USER, TOKEN_USER, SESSION_USER]) {
     await createMember(playwright, baseURL, account);
   }
 });
@@ -491,6 +493,10 @@ test("passkeys: register one, sign in with it, then remove it", async ({ page })
   await expect(formAlert(page)).toHaveText("Give the passkey a name.");
   await dialog.getByLabel("Name for this passkey").fill("Test laptop");
   await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(formAlert(page)).toHaveText("Enter your password.");
+  await expect(dialog.getByLabel("Password")).toBeFocused();
+  await dialog.getByLabel("Password").fill(PASSKEY_USER.password);
+  await dialog.getByRole("button", { name: "Continue" }).click();
 
   await expect(dialog).toHaveCount(0);
   await expect(passkeys.getByText("Passkey “Test laptop” added.")).toBeVisible();
@@ -501,7 +507,8 @@ test("passkeys: register one, sign in with it, then remove it", async ({ page })
   // A second passkey on the same authenticator is refused, in plain words.
   await passkeys.getByRole("button", { name: "Add a passkey" }).click();
   await page.getByLabel("Name for this passkey").fill("Same device again");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await dialog.getByLabel("Password").fill(PASSKEY_USER.password);
+  await dialog.getByRole("button", { name: "Continue" }).click();
   await expect(formAlert(page)).toHaveText("This device already has a passkey for your account.");
   await page.getByRole("button", { name: "Cancel" }).click();
 
@@ -594,6 +601,13 @@ test("app passwords: create one, see the token once, use it as a Bearer token", 
   await expect(formAlert(page)).toHaveText("Give the app password a name.");
   await dialog.getByLabel("What is it for?").fill("Backup script");
   await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(formAlert(page)).toHaveText("Enter your password.");
+  await dialog.getByLabel("Password").fill("definitely not my password");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(formAlert(page)).toHaveText("That password isn't right. Check it and try again.");
+  await expect(dialog.getByLabel("Password")).toBeFocused();
+  await dialog.getByLabel("Password").fill(TOKEN_USER.password);
+  await dialog.getByRole("button", { name: "Create" }).click();
 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Your new app password" })).toBeFocused();
@@ -671,6 +685,151 @@ test("app passwords: revoking stops the token working", async ({ page, context, 
   await expect(table).toContainText("App password revoked");
   await expect(table).toContainText("App password created");
   await expect(table).toContainText("App password: Backup script");
+});
+
+test("app passwords: with two-step verification on, the dialog also asks for a code", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await setLocale(context, String(baseURL), "en");
+  await logIn(page, TOKEN_USER);
+  // Mocked: this account has no second factor, and the server side is covered by the API tests.
+  await page.route("**/api/auth/totp", (route) =>
+    route.fulfill({ json: { enabled: true, recoveryCodesLeft: 4 } }),
+  );
+  let sent: unknown;
+  await page.route("**/api/auth/app-passwords", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    sent = route.request().postDataJSON();
+    await route.fulfill({ status: 401, json: { error: { code: "invalid_code" } } });
+  });
+  await page.goto("/settings");
+
+  await section(page, "App passwords")
+    .getByRole("button", { name: "Create an app password" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Create an app password" });
+  await dialog.getByLabel("What is it for?").fill("Mocked");
+  await dialog.getByLabel("Password").fill(TOKEN_USER.password);
+  await expect(dialog.getByLabel("Code from your app or a recovery code")).toBeVisible();
+  await expectNoViolations(page);
+
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(formAlert(page)).toHaveText("Enter the code from your authenticator app.");
+  await dialog.getByLabel("Code from your app or a recovery code").fill(" 123 456 ");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(formAlert(page)).toHaveText("That code didn't work. Check it and try again.");
+  await expect(dialog.getByLabel("Code from your app or a recovery code")).toBeFocused();
+  expect(sent).toEqual({ name: "Mocked", password: TOKEN_USER.password, code: "123456" });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Sessions and password
+// ---------------------------------------------------------------------------------------------
+
+test("settings: sign out of other devices ends every other session and keeps this one", async ({
+  page,
+  playwright,
+  context,
+  baseURL,
+}) => {
+  const origin = String(baseURL);
+  await setLocale(context, origin, "en");
+  const other = await apiClient(playwright, origin);
+  expect((await other.post("/api/auth/login", { data: SESSION_USER })).ok()).toBe(true);
+  expect((await other.get("/api/auth/me")).status()).toBe(200);
+
+  await logIn(page, SESSION_USER);
+  await page.goto("/settings");
+  const devices = section(page, "Signed-in devices");
+  await devices.getByRole("button", { name: "Sign out of other devices" }).click();
+  const confirm = page.getByRole("dialog", { name: "Sign out of other devices?" });
+  await expect(confirm).toBeVisible();
+  await expectNoViolations(page);
+
+  // Cancel changes nothing.
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toHaveCount(0);
+  expect((await other.get("/api/auth/me")).status()).toBe(200);
+
+  await devices.getByRole("button", { name: "Sign out of other devices" }).click();
+  await page
+    .getByRole("dialog", { name: "Sign out of other devices?" })
+    .getByRole("button", { name: "Sign out", exact: true })
+    .click();
+  await expect(devices.getByText("Signed out of all other devices.")).toBeVisible();
+  expect((await other.get("/api/auth/me")).status()).toBe(401);
+
+  // This browser is still signed in.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Security", level: 1 })).toBeVisible();
+  await other.dispose();
+});
+
+test("settings: change the password", async ({ page, playwright, context, baseURL }) => {
+  const origin = String(baseURL);
+  const other = await apiClient(playwright, origin);
+  expect((await other.post("/api/auth/login", { data: SESSION_USER })).ok()).toBe(true);
+
+  await logIn(page, SESSION_USER);
+  await page.goto("/settings");
+  const form = section(page, "Your password");
+  const submit = form.getByRole("button", { name: "Change password" });
+  await expectNoViolations(page);
+
+  await submit.click();
+  await expect(formAlert(page)).toHaveText("Enter your password.");
+  await expect(form.getByLabel("Current password")).toBeFocused();
+  await form.getByLabel("Current password").fill("not my password at all");
+  await form.getByLabel("New password").fill("short");
+  await submit.click();
+  await expect(formAlert(page)).toHaveText("The password needs at least 12 characters.");
+  await form.getByLabel("New password").fill(NEW_PASSWORD);
+  await form.getByLabel("Confirm password").fill(`${NEW_PASSWORD} typo`);
+  await submit.click();
+  await expect(formAlert(page)).toHaveText("The two passwords don't match.");
+  await form.getByLabel("Confirm password").fill(NEW_PASSWORD);
+  await submit.click();
+  await expect(formAlert(page)).toHaveText("That password isn't right. Check it and try again.");
+  await expect(form.getByLabel("Current password")).toBeFocused();
+
+  await form.getByLabel("Current password").fill(SESSION_USER.password);
+  await submit.click();
+  await expect(
+    form.getByText("Password changed. Other devices have been signed out."),
+  ).toBeVisible();
+  await expect(form.getByLabel("Current password")).toHaveValue("");
+  await expect(form.getByLabel("New password")).toHaveValue("");
+  await expectNoViolations(page);
+
+  // The other session ended, this one did not, and only the new password signs in.
+  expect((await other.get("/api/auth/me")).status()).toBe(401);
+  await other.dispose();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Security", level: 1 })).toBeVisible();
+  const fresh = await apiClient(playwright, origin);
+  expect((await fresh.post("/api/auth/login", { data: SESSION_USER })).status()).toBe(401);
+  expect(
+    (
+      await fresh.post("/api/auth/login", { data: { ...SESSION_USER, password: NEW_PASSWORD } })
+    ).ok(),
+  ).toBe(true);
+  await fresh.dispose();
+
+  await page.goto("/activity");
+  await expect(page.getByRole("table", { name: "Activity" })).toContainText("Password changed");
+
+  await setLocale(context, origin, "ca");
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "La teva contrasenya" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Dispositius amb la sessió iniciada" }),
+  ).toBeVisible();
+  await expectNoViolations(page);
 });
 
 // ---------------------------------------------------------------------------------------------

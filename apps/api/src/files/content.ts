@@ -8,6 +8,10 @@ import type { FileRow, Tx, VersionRow } from "./tree.js";
 
 const CONTENT_CSP =
   "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'";
+// Chromium refuses to start its PDF viewer inside a sandboxed frame, so an inline PDF drops
+// `sandbox`. default-src 'none' still stops anything the file tries to load, and
+// frame-ancestors keeps it to this origin's own pages.
+const PDF_CSP = "default-src 'none'; frame-ancestors 'self'";
 const INLINE = new Set<string>(INLINE_MIME_TYPES);
 
 export function findVersion(
@@ -55,7 +59,10 @@ export function sendBlob(
     res.setHeader("Content-Type", "application/octet-stream");
   }
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Security-Policy", CONTENT_CSP);
+  res.setHeader(
+    "Content-Security-Policy",
+    inline && version.mime === "application/pdf" ? PDF_CSP : CONTENT_CSP,
+  );
   res.setHeader("Cache-Control", "private, no-cache");
   res.sendFile(
     blobPath(dataDir, version.ownerId, version.id),

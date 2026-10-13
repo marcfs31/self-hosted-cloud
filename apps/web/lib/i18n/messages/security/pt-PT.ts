@@ -143,6 +143,38 @@ export const ptPT: Security = {
     revoking: "A revogar…",
     revoked: (name) => `Palavra-passe de aplicação “${name}” revogada.`,
   },
+  stepUp: {
+    intro: "Para proteger a sua conta, confirme que é você antes de continuar.",
+    loading: "A carregar…",
+    passwordRequired: "Introduza a sua palavra-passe.",
+    codeLabel: "Código da aplicação ou código de recuperação",
+    codeHint:
+      "Os 6 dígitos que a sua aplicação de autenticação mostra neste momento. Um código de recuperação também serve.",
+    codeRequired: "Introduza o código da sua aplicação de autenticação.",
+    wrongPassword: "Essa palavra-passe não está certa. Verifique-a e tente novamente.",
+  },
+  password: {
+    title: "A sua palavra-passe",
+    intro:
+      "Escolha uma nova palavra-passe. Mantém a sessão iniciada aqui e todos os outros dispositivos terminam a sessão.",
+    currentLabel: "Palavra-passe atual",
+    newLabel: "Nova palavra-passe",
+    submit: "Alterar palavra-passe",
+    submitting: "A alterar…",
+    done: "Palavra-passe alterada. A sessão nos outros dispositivos foi terminada.",
+  },
+  sessions: {
+    title: "Dispositivos com sessão iniciada",
+    intro:
+      "Iniciou sessão num sítio que já não usa ou perdeu um dispositivo? Termine a sessão em todos os outros dispositivos. Mantém a sessão iniciada aqui.",
+    button: "Terminar sessão nos outros dispositivos",
+    confirmTitle: "Terminar sessão nos outros dispositivos?",
+    confirmBody:
+      "Todos os outros navegadores e dispositivos terminam a sessão de imediato e vão precisar da sua palavra-passe outra vez. As palavras-passe de aplicação continuam a funcionar.",
+    confirmSubmit: "Terminar sessão",
+    confirming: "A terminar…",
+    done: "Sessão terminada em todos os outros dispositivos.",
+  },
   admin: {
     resetMfa: "Repor a verificação em dois passos",
     resetMfaFor: (email) => `Repor a verificação em dois passos de ${email}`,
