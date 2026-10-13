@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-13
+
+### Added
+
+- File browser: folders, breadcrumbs, rename, move, download, in all five languages.
+- Resumable uploads (tus): pause, resume, retry, and resume after a reload; drag and drop.
+- Version history: uploading onto an existing name asks Replace (keeps the old version) or
+  Keep both; versions can be downloaded, restored and deleted.
+- Trash with restore, delete forever and empty trash; items are purged after 30 days.
+- Storage usage meter; admins see each user's used space.
+- Files are stored by ID only, never by name, and served with safe headers (no inline HTML).
+
 ## [0.4.0] - 2026-10-13
 
 ### Added
