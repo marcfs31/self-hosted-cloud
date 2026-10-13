@@ -32,12 +32,21 @@ export function useSession(): Session {
   return session;
 }
 
-/** Only same-site paths may be used as a post-login destination. */
+const SAME_SITE = "https://same-site.invalid";
+
+/**
+ * Only same-site paths may be used as a post-login destination. Judged on the URL the browser
+ * will build, not on the string: its parser drops tabs and line breaks and reads "\\" as "/",
+ * so "/\t/evil.example" and "/\\evil.example" both lead off-site.
+ */
 export function safeNextPath(next: string | null): string {
-  if (next?.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")) {
-    return next;
+  if (!next?.startsWith("/")) return "/";
+  try {
+    const url = new URL(next, SAME_SITE);
+    return url.origin === SAME_SITE ? url.pathname + url.search + url.hash : "/";
+  } catch {
+    return "/";
   }
-  return "/";
 }
 
 function loginUrl(): string {
