@@ -353,6 +353,90 @@ Look at the raw reports on the Pi:
 sudo sh -c 'for f in /data/status/*.json; do echo "$f: $(cat "$f")"; done'
 ```
 
+## WebDAV (mount the cloud as a drive)
+
+`https://<host>/dav/` is each user's root folder over WebDAV, so Finder, Windows Explorer and
+phone file apps can browse, open and save files like on a network drive. It is served by the API
+(Caddy routes `/dav` and `/dav/*` to `api:4000` with no body size limit and no compression) and
+goes through the same rules as the web UI: the same quota, the trash (a delete over WebDAV is
+recoverable for 30 days), version history (saving over a file adds a version), the activity log
+(shown with `via: webdav`) and the change feed.
+
+**Sign-in.** HTTP Basic: the user name is the account **email**, the password is an **app
+password** (Security, App passwords, "Create an app password"). The account password and the
+browser session cookie are never accepted on `/dav`. Make one app password per device so it can
+be revoked alone; a revoked one stops working at once. Five wrong attempts from one address lock
+that address out of `/dav` for 15 minutes (the same rule as sign-in). Always use the `https://`
+address: Basic sends the app password with every request.
+
+### macOS Finder
+
+1. Finder, Go, Connect to Server (Cmd-K).
+2. Enter `https://<host>/dav/` and click Connect.
+3. Choose "Registered User", enter the email and the app password, click Connect.
+
+The drive appears in the sidebar under Locations. Finder writes `.DS_Store` and `._*` files
+into folders it opens; they are ordinary files here.
+
+### Windows
+
+Use Map network drive (This PC, three-dot menu, Map network drive), folder
+`https://<host>/dav/` (keep the trailing slash), tick "Connect using different credentials",
+then the email and the app password. Windows needs HTTPS with a certificate it trusts; a
+Tailscale-issued certificate is fine.
+
+Two Windows limits to know:
+
+- **The WebClient service must be running** (Services, "WebClient", start type Automatic). It is
+  not installed on Windows Server unless the "WebDAV Redirector" feature is added.
+- **Files larger than 50 MB fail** ("The file size exceeds the limit allowed and cannot be
+  saved") because the WebClient caps downloads at 50 000 000 bytes by default. Raise it
+  from an elevated prompt, then restart the service:
+
+  ```bat
+  reg add HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters /v FileSizeLimitInBytes /t REG_DWORD /d 4294967295 /f
+  net stop WebClient && net start WebClient
+  ```
+
+  `4294967295` (about 4 GB) is the highest value the setting accepts; bigger files should be
+  uploaded through the web UI or the CLI, which resume after an interruption. Windows also
+  uploads a file in one request, so a flaky connection restarts the file.
+
+### iPhone and iPad (Files app)
+
+Files, "..." menu, Connect to Server, `https://<host>/dav/`, Registered User, email and app
+password. Third-party apps (Documents, FE File Explorer, Infuse for video) also accept a WebDAV
+URL with the same credentials.
+
+### Android
+
+Android has no built-in WebDAV client. Use an app that does: Solid Explorer, CX File Explorer or
+FolderSync (set the account type to WebDAV, server `<host>`, path `/dav/`, port 443, SSL on, user
+= email, password = app password). Files-based apps such as Total Commander work the same way.
+
+### Limits and behaviour
+
+- **Locks are advisory and per process.** LOCK/UNLOCK (class 2, exclusive write, up to one hour,
+  refreshable) are kept in the API's memory: they only constrain other WebDAV requests, not the
+  web UI, the API or tus uploads, and a restart of the API forgets them (clients re-lock). The
+  `If` header is checked for lock tokens only; ETag conditions in it are ignored.
+- **Depth: infinity PROPFIND is refused** (403, `propfind-finite-depth`); clients list one folder
+  at a time.
+- **Names** follow the web UI's rules: no `/` or `\`, no control characters, at most 255
+  characters, no leading or trailing spaces; names are stored in Unicode NFC. Names are
+  case-sensitive.
+- **Quota:** a write that does not fit answers `507 Insufficient Storage`; free space is
+  reported to clients as `quota-available-bytes`.
+- **Not supported:** custom (dead) properties (PROPPATCH answers 403 per property, which Finder
+  tolerates), shared locks, partial PUT, and versioning methods.
+- **Temp files:** uploads stream to `/data/tmp/dav` and are moved into place once complete; the
+  hourly sweep removes leftovers of a crash.
+- **Troubleshooting:** `401` repeatedly means wrong email or a revoked app password; `429` means
+  the address is locked out for 15 minutes; `502` on a rename/copy means the client sent a
+  `Destination` host that is not this server (check the Host header Caddy forwards);
+  `curl -u '<email>:<app password>' -X PROPFIND -H 'Depth: 1' https://<host>/dav/` is the
+  quickest test from the Pi.
+
 ## Logs and log rotation
 
 Container logs use Docker's `json-file` driver, rotated by the compose file: 10 MB per file,
