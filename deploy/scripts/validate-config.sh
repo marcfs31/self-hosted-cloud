@@ -51,7 +51,8 @@ fi
 echo "refused, as intended"
 
 echo "== 4. compose files"
-export CLOUD_DOMAIN=cloud.tail0000.ts.net CLOUD_VERSION=0.0.0 CLOUD_IMAGE_PREFIX=ghcr.io/x/y
+export CLOUD_DOMAIN=cloud.tail0000.ts.net CLOUD_VERSION=0.0.0 CLOUD_IMAGE_PREFIX=ghcr.io/x/y \
+  SECRET_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 base="$(docker compose -f "${here}/docker-compose.yml" config)"
 if printf '%s' "${base}" | grep -q tailscaled; then
   echo "FAIL: docker-compose.yml mounts the tailscaled socket" >&2

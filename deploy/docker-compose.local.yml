@@ -2,6 +2,7 @@
 # certificate files.
 #
 #   CLOUD_DOMAIN=localhost CLOUD_VERSION=local CLOUD_IMAGE_PREFIX=cloud \
+#   SECRET_KEY="$(openssl rand -base64 32)" \
 #     docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 #   curl -k https://localhost/api/health
 #
