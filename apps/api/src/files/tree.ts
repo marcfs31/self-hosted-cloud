@@ -112,7 +112,7 @@ export function usedBytes(tx: Tx, ownerId: string): number {
   return row?.n ?? 0;
 }
 
-function nodeSelect(tx: Tx) {
+export function nodeSelect(tx: Tx) {
   return tx
     .select({
       file: files,
@@ -127,9 +127,9 @@ function nodeSelect(tx: Tx) {
     .leftJoin(fileVersions, eq(fileVersions.id, files.currentVersionId));
 }
 
-type NodeRow = ReturnType<ReturnType<typeof nodeSelect>["all"]>[number];
+export type NodeRow = ReturnType<ReturnType<typeof nodeSelect>["all"]>[number];
 
-function toFileNode(r: NodeRow): FileNode {
+export function toFileNode(r: NodeRow): FileNode {
   const isFile = r.file.kind === "file";
   return {
     id: r.file.id,

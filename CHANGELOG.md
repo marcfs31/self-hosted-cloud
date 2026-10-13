@@ -6,6 +6,53 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-13
+
+### Added
+
+- Sign in with a passkey (Face ID, Touch ID, Windows Hello or a security key).
+- Two-step verification with an authenticator app, plus ten single-use recovery codes.
+- App passwords: named, revocable tokens for the command-line tool, WebDAV and desktop sync.
+- Activity log of sign-ins and security changes; admins see security events for everyone.
+- Admins can reset a member's two-step verification.
+
+### Fixed
+
+- The header navigation wraps on narrow screens instead of scrolling sideways.
+
+## [0.8.0] - 2026-10-13
+
+### Added
+
+- Photos timeline grouped by month, ordered by the date each photo was taken (read from the
+  photo itself, falling back to the upload date), with a lightbox and video playback.
+- Albums: create, rename, add a selection of photos, remove photos, delete (photos stay in your
+  files).
+- Thumbnails for images and videos, generated on the server and cached.
+
+### Changed
+
+- The api image now includes ffmpeg for video thumbnails.
+
+## [0.7.0] - 2026-10-13
+
+### Added
+
+- Share files and folders by link, with an expiry (1 day to 1 year, or never) and an optional
+  password; links are shown once and can be revoked from the "Shared links" page.
+- Shared folders can be browsed and downloaded as a zip, streamed without temporary files.
+- Drop boxes: a folder link that lets anyone upload into that folder without seeing it.
+- Public share pages work without an account and in all five languages.
+
+## [0.6.0] - 2026-10-13
+
+### Added
+
+- Search across all folders by any part of a name, with live results, the folder path of each
+  result, and a `/` keyboard shortcut.
+- Full-screen previews for images, video, audio, PDF and text files, with next/previous and
+  keyboard navigation; text previews read at most the first 1 MiB.
+
 ## [0.5.0] - 2026-10-13
 
 ### Added

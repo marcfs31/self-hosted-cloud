@@ -16,6 +16,10 @@ export const ca: Errors = {
   invalid_move: "Aquest element no es pot moure ni canviar d'aquesta manera.",
   quota_exceeded: "No queda prou espai al teu emmagatzematge per a això.",
   version_is_current: "Aquesta és la versió actual. Restaura primer una altra versió.",
+  mfa_required: "Escriu el codi de la teva aplicació d'autenticació per continuar.",
+  invalid_code: "Aquest codi no ha funcionat. Revisa'l i torna-ho a provar.",
+  thumbnail_unavailable: "No hi ha cap vista prèvia disponible per a aquest fitxer.",
+  share_locked: "Aquest enllaç està protegit. Escriu la contrasenya per obrir-lo.",
   internal:
     "Alguna cosa ha anat malament per la nostra banda. Torna-ho a provar d'aquí a un moment.",
 };

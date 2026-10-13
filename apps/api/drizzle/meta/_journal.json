@@ -15,6 +15,34 @@
       "when": 1791851003599,
       "tag": "0001_files",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791851913863,
+      "tag": "0002_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791855001888,
+      "tag": "0003_shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791855186895,
+      "tag": "0004_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791855415010,
+      "tag": "0005_security",
+      "breakpoints": true
     }
   ]
 }

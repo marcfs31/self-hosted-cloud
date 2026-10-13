@@ -1,6 +1,7 @@
 import { asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { Router } from "express";
 import {
+  activityPageQuery,
   createInviteRequest,
   updateUserRequest,
   type CreatedInviteResponse,
@@ -9,10 +10,12 @@ import {
   type ListUsersResponse,
   type User,
 } from "@cloud/shared";
+import { listActivity } from "../activity/routes.js";
+import { recordActivity } from "../activity/record.js";
 import { toUser, authOf, type SessionService } from "../auth/sessions.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import type { Db } from "../db/client.js";
-import { fileVersions, invites, users } from "../db/schema/index.js";
+import { fileVersions, invites, recoveryCodes, totp, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -74,6 +77,34 @@ export function createAdminRouter(opts: {
     if (!row) throw new HttpError(404, "not_found");
     const body: User = toUser(row);
     res.json(body);
+  });
+
+  // Lost phone and lost recovery codes: the admin clears the second factor, the user signs in
+  // with the password (or a passkey) and sets it up again.
+  router.post("/users/:id/reset-mfa", (req, res) => {
+    const admin = authOf(res).user;
+    if (req.params.id === admin.id) throw new HttpError(409, "cannot_change_self");
+    const targetId = req.params.id;
+    db.transaction((tx) => {
+      if (!tx.select({ id: users.id }).from(users).where(eq(users.id, targetId)).get()) {
+        throw new HttpError(404, "not_found");
+      }
+      tx.delete(totp).where(eq(totp.userId, targetId)).run();
+      tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, targetId)).run();
+      recordActivity(tx, {
+        userId: targetId,
+        type: "mfa_reset_by_admin",
+        detail: { by: admin.email },
+        ip: req.ip,
+        at: now(),
+      });
+    });
+    res.status(204).end();
+  });
+
+  router.get("/activity", (req, res) => {
+    const query = activityPageQuery.parse(req.query);
+    res.json(listActivity(db, { securityTypesOfAllUsers: true }, query));
   });
 
   // Revoked invites are hidden: the contract's Invite has no revoked state.

@@ -29,11 +29,36 @@ import * as systemPtPT from "./system/pt-PT";
 import * as systemEs from "./system/es";
 import * as systemCa from "./system/ca";
 import * as systemIt from "./system/it";
+import * as sharesEn from "./shares/en";
+import * as sharesPtPT from "./shares/pt-PT";
+import * as sharesEs from "./shares/es";
+import * as sharesCa from "./shares/ca";
+import * as sharesIt from "./shares/it";
+import * as searchEn from "./search/en";
+import * as searchPtPT from "./search/pt-PT";
+import * as searchEs from "./search/es";
+import * as searchCa from "./search/ca";
+import * as searchIt from "./search/it";
 import * as trashEn from "./trash/en";
 import * as trashPtPT from "./trash/pt-PT";
 import * as trashEs from "./trash/es";
 import * as trashCa from "./trash/ca";
 import * as trashIt from "./trash/it";
+import * as securityEn from "./security/en";
+import * as securityPtPT from "./security/pt-PT";
+import * as securityEs from "./security/es";
+import * as securityCa from "./security/ca";
+import * as securityIt from "./security/it";
+import * as activityEn from "./activity/en";
+import * as activityPtPT from "./activity/pt-PT";
+import * as activityEs from "./activity/es";
+import * as activityCa from "./activity/ca";
+import * as activityIt from "./activity/it";
+import * as photosEn from "./photos/en";
+import * as photosPtPT from "./photos/pt-PT";
+import * as photosEs from "./photos/es";
+import * as photosCa from "./photos/ca";
+import * as photosIt from "./photos/it";
 
 /** One entry per namespace. A new namespace adds a key here and one line per locale below. */
 export interface Messages {
@@ -44,6 +69,11 @@ export interface Messages {
   files: filesEn.Files;
   trash: trashEn.Trash;
   system: systemEn.System;
+  security: securityEn.Security;
+  activity: activityEn.Activity;
+  photos: photosEn.Photos;
+  shares: sharesEn.Shares;
+  search: searchEn.Search;
 }
 
 export const MESSAGES: Record<Locale, Messages> = {
@@ -55,6 +85,11 @@ export const MESSAGES: Record<Locale, Messages> = {
     files: filesEn.en,
     trash: trashEn.en,
     system: systemEn.en,
+    security: securityEn.en,
+    activity: activityEn.en,
+    photos: photosEn.en,
+    shares: sharesEn.en,
+    search: searchEn.en,
   },
   "pt-PT": {
     common: commonPtPT.ptPT,
@@ -64,6 +99,11 @@ export const MESSAGES: Record<Locale, Messages> = {
     files: filesPtPT.ptPT,
     trash: trashPtPT.ptPT,
     system: systemPtPT.ptPT,
+    security: securityPtPT.ptPT,
+    activity: activityPtPT.ptPT,
+    photos: photosPtPT.ptPT,
+    shares: sharesPtPT.ptPT,
+    search: searchPtPT.ptPT,
   },
   es: {
     common: commonEs.es,
@@ -73,6 +113,11 @@ export const MESSAGES: Record<Locale, Messages> = {
     files: filesEs.es,
     trash: trashEs.es,
     system: systemEs.es,
+    security: securityEs.es,
+    activity: activityEs.es,
+    photos: photosEs.es,
+    shares: sharesEs.es,
+    search: searchEs.es,
   },
   ca: {
     common: commonCa.ca,
@@ -82,6 +127,11 @@ export const MESSAGES: Record<Locale, Messages> = {
     files: filesCa.ca,
     trash: trashCa.ca,
     system: systemCa.ca,
+    security: securityCa.ca,
+    activity: activityCa.ca,
+    photos: photosCa.ca,
+    shares: sharesCa.ca,
+    search: searchCa.ca,
   },
   it: {
     common: commonIt.it,
@@ -91,5 +141,10 @@ export const MESSAGES: Record<Locale, Messages> = {
     files: filesIt.it,
     trash: trashIt.it,
     system: systemIt.it,
+    security: securityIt.it,
+    activity: activityIt.it,
+    photos: photosIt.it,
+    shares: sharesIt.it,
+    search: searchIt.it,
   },
 };

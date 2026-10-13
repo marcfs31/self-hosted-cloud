@@ -38,6 +38,10 @@ FROM node:24-slim AS runtime
 ENV NODE_ENV=production \
     DATA_DIR=/data
 WORKDIR /app
+# ffmpeg (with ffprobe) makes video thumbnails and reads video dates; the build stages never need it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN mkdir /data && chown node:node /data
 # Only what runs: the deployed package has no "files" allowlist, so it also carries src,
 # tests and tsconfigs. dist/ also holds operational entry points (e.g. backup-db.js).
