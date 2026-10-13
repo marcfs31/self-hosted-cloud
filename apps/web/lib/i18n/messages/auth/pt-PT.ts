@@ -1,0 +1,25 @@
+import type { Auth } from "./en";
+
+export const ptPT: Auth = {
+  email: "E-mail",
+  password: "Palavra-passe",
+  passwordHint: "Pelo menos 12 caracteres. Algumas palavras aleatórias funcionam bem.",
+  confirmPassword: "Confirmar palavra-passe",
+  passwordTooShort: "A palavra-passe tem de ter pelo menos 12 caracteres.",
+  passwordMismatch: "As duas palavras-passe não coincidem.",
+  setupTitle: "Configure a sua cloud",
+  setupIntro: "Crie a primeira conta. Será a conta de administração.",
+  setupSubmit: "Criar conta de administração",
+  setupSubmitting: "A criar…",
+  loginTitle: "Iniciar sessão",
+  loginSubmit: "Iniciar sessão",
+  loginSubmitting: "A iniciar sessão…",
+  loginNoAccount: "Precisa de uma conta? Peça uma ligação de convite à administração desta cloud.",
+  registerTitle: "Aceitar o convite",
+  registerIntro: "Escolha um e-mail e uma palavra-passe para criar a sua conta.",
+  registerSubmit: "Criar conta",
+  registerSubmitting: "A criar…",
+  registerMissingToken: "Esta ligação de convite está incompleta. Peça uma nova à administração.",
+  registerHaveAccount: "Já tem conta?",
+  registerLoginLink: "Iniciar sessão",
+};

@@ -1,0 +1,58 @@
+import type { Widen } from "../../types";
+
+export const en = {
+  title: "Admin",
+  users: {
+    title: "Users",
+    caption: "Users",
+    email: "Email",
+    role: "Role",
+    quota: "Quota (GiB)",
+    created: "Created",
+    actions: "Actions",
+    you: "You",
+    roleFor: (email: string) => `Role for ${email}`,
+    quotaFor: (email: string) => `Quota in GiB for ${email}`,
+    save: "Save",
+    saving: "Saving…",
+    saveFor: (email: string) => `Save changes for ${email}`,
+    saved: "Saved",
+    quotaInvalid: "Enter the quota as a number of GiB, for example 50 or 1.5.",
+    loading: "Loading users…",
+  },
+  invites: {
+    title: "Invites",
+    caption: "Invites",
+    createTitle: "Create an invite",
+    role: "Role",
+    expiresInDays: "Expires after (days)",
+    expiresHint: "Between 1 and 30 days.",
+    create: "Create invite",
+    creating: "Creating…",
+    createdTitle: "Invite created",
+    linkLabel: "Invite link",
+    linkNote:
+      "This link won't be shown again. Copy it now and share it with the person you invite.",
+    copy: "Copy",
+    copied: "Copied to the clipboard",
+    copyFailed: "Couldn't copy automatically. Select the link and copy it yourself.",
+    dismiss: "Hide link",
+    colRole: "Role",
+    colCreated: "Created",
+    colExpires: "Expires",
+    colStatus: "Status",
+    colActions: "Actions",
+    status: {
+      active: "Active",
+      used: "Used",
+      expired: "Expired",
+    },
+    revoke: "Revoke",
+    revoking: "Revoking…",
+    revokeFor: (role: string, created: string) => `Revoke ${role} invite created ${created}`,
+    empty: "No invites yet.",
+    loading: "Loading invites…",
+  },
+};
+
+export type Admin = Widen<typeof en>;
