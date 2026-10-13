@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
+### Added
+
+- Share files and folders by link, with an expiry (1 day to 1 year, or never) and an optional
+  password; links are shown once and can be revoked from the "Shared links" page.
+- Shared folders can be browsed and downloaded as a zip, streamed without temporary files.
+- Drop boxes: a folder link that lets anyone upload into that folder without seeing it.
+- Public share pages work without an account and in all five languages.
+
 ## [0.6.0] - 2026-10-13
 
 ### Added
