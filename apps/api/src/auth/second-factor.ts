@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, count, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import type { DbHandle } from "../db/handle.js";
 import { recoveryCodes, totp } from "../db/schema/index.js";
+import { openSecret } from "./secret-box.js";
 import { hashToken } from "./tokens.js";
 import { base32Encode, verifyTotp } from "./totp.js";
 
@@ -59,14 +60,20 @@ export function replaceRecoveryCodes(db: DbHandle, userId: string): string[] {
 }
 
 /** Marks the step used only if it is newer than the last one, so a replay cannot win. */
-function consumeTotp(db: DbHandle, userId: string, code: string, nowMs: number): boolean {
+function consumeTotp(
+  db: DbHandle,
+  userId: string,
+  code: string,
+  nowMs: number,
+  key: Buffer,
+): boolean {
   const row = db
     .select({ secret: totp.secret, lastUsedStep: totp.lastUsedStep })
     .from(totp)
     .where(and(eq(totp.userId, userId), isNotNull(totp.enabledAt)))
     .get();
   if (!row) return false;
-  const step = verifyTotp(row.secret, code, nowMs, row.lastUsedStep);
+  const step = verifyTotp(openSecret(key, row.secret), code, nowMs, row.lastUsedStep);
   if (step === null) return false;
   const updated = db
     .update(totp)
@@ -104,8 +111,9 @@ export function consumeSecondFactor(
   userId: string,
   rawCode: string,
   nowMs: number,
+  key: Buffer,
 ): SecondFactorMethod | null {
   const code = rawCode.trim();
-  if (/^\d{6}$/.test(code)) return consumeTotp(db, userId, code, nowMs) ? "totp" : null;
+  if (/^\d{6}$/.test(code)) return consumeTotp(db, userId, code, nowMs, key) ? "totp" : null;
   return consumeRecoveryCode(db, userId, code, nowMs) ? "recovery_code" : null;
 }

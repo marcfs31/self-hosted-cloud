@@ -7,6 +7,7 @@ import { createdAppPasswordResponse, createdInviteResponse, meResponse } from "@
 import { createApp } from "../../../api/src/app.js";
 import type { Config } from "../../../api/src/config.js";
 import { openDatabase } from "../../../api/src/db/client.js";
+import { TEST_SECRET_KEY } from "../../../api/src/testing/secret-key.js";
 
 const ORIGIN = "http://localhost:3000";
 const PASSWORD = "correct horse battery";
@@ -22,7 +23,13 @@ export interface LiveApi {
 /** The real API (real SQLite, real blob storage in a temp dir) listening on a free port. */
 export async function startApi(): Promise<LiveApi> {
   const dataDir = mkdtempSync(join(tmpdir(), "cloud-desktop-api-"));
-  const config: Config = { production: false, port: 0, dataDir, publicOrigin: ORIGIN };
+  const config: Config = {
+    production: false,
+    port: 0,
+    dataDir,
+    publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
+  };
   const db = openDatabase(join(dataDir, "db", "cloud.sqlite"));
   const app = createApp({ config, version: "0.0.0", db });
   const server: Server = createServer((req, res) => {
@@ -60,7 +67,7 @@ export async function startApi(): Promise<LiveApi> {
     const made = await fetch(`${base}/api/auth/app-passwords`, {
       method: "POST",
       headers: { Origin: ORIGIN, Cookie: cookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "desktop tests" }),
+      body: JSON.stringify({ name: "desktop tests", password: PASSWORD }),
     });
     return { id: user.id, token: createdAppPasswordResponse.parse(await made.json()).token };
   }

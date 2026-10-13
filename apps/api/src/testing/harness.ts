@@ -17,15 +17,22 @@ import type { Config } from "../config.js";
 import { openDatabase } from "../db/client.js";
 import { users } from "../db/schema/index.js";
 import type { MediaTools } from "../photos/tools.js";
+import { TEST_SECRET_KEY } from "./secret-key.js";
 
 export const ORIGIN = "http://localhost:3000";
-const PASSWORD = "correct horse battery";
+export const PASSWORD = "correct horse battery";
 
 export function harness(opts: { media?: Partial<MediaTools> } = {}) {
   const db = openDatabase(":memory:");
   const clock = { t: Date.now() };
   const dataDir = mkdtempSync(join(tmpdir(), "cloud-files-"));
-  const config: Config = { production: false, port: 0, dataDir, publicOrigin: ORIGIN };
+  const config: Config = {
+    production: false,
+    port: 0,
+    dataDir,
+    publicOrigin: ORIGIN,
+    secretKey: TEST_SECRET_KEY,
+  };
   const app = createApp({
     config,
     version: "0.0.0",
