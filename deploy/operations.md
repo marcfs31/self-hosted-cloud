@@ -4,15 +4,16 @@ Day-two runbook for the Pi: updates, rollback, backups, restore, monitoring. Set
 machine itself is in `pi-setup.md`. Everything below assumes the stack lives in `/opt/cloud`
 and the data disk is mounted at `/data`.
 
-| What                         | Where                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| Compose project, `.env`      | `/opt/cloud/`                                                             |
-| Host scripts                 | `/opt/cloud/scripts/` (`backup.sh`, `restore-test.sh`, `health-check.sh`) |
-| systemd units                | `/etc/systemd/system/cloud-*.{service,timer}`                             |
-| Restic repository settings   | `/etc/cloud/restic.env`, `/etc/cloud/restic-offsite.env`                  |
-| Restic passwords             | `/etc/cloud/restic*.pass` (mode 0600, **copied off the Pi**)              |
-| Live data                    | `/data/files`, `/data/db`, `/data/tmp`, `/data/thumbs`                    |
-| Database snapshot for backup | `/data/backups/cloud.sqlite` (written by the API, never the live DB)      |
+| What                         | Where                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| Compose project, `.env`      | `/opt/cloud/`                                                                       |
+| Host scripts                 | `/opt/cloud/scripts/` (`backup.sh`, `restore-test.sh`, `health-check.sh`, `lib.sh`) |
+| systemd units                | `/etc/systemd/system/cloud-*.{service,timer}`                                       |
+| Restic repository settings   | `/etc/cloud/restic.env`, `/etc/cloud/restic-offsite.env`                            |
+| Restic passwords             | `/etc/cloud/restic*.pass` (mode 0600, **copied off the Pi**)                        |
+| Live data                    | `/data/files`, `/data/db`, `/data/tmp`, `/data/thumbs`                              |
+| Database snapshot for backup | `/data/backups/cloud.sqlite` (written by the API, never the live DB)                |
+| Status reports for dashboard | `/data/status/{backup,restore-test,health}.json` (written by the scripts)           |
 
 ## Update
 
@@ -85,6 +86,27 @@ What is backed up, nightly at 03:30 by `cloud-backup.timer`:
 3. `restic forget --prune` with `--keep-daily 7 --keep-weekly 4 --keep-monthly 12`.
 
 Thumbnails and temp uploads are derived or transient and are not backed up.
+
+### The database snapshot by hand (`backup-db`)
+
+`node dist/backup-db.js <dest>` inside the API image takes the consistent copy of
+`$DATA_DIR/db/cloud.sqlite` (`DATA_DIR` is already set in the container). It uses SQLite's
+online backup, so it is safe while the API serves traffic, and only ever reads the live
+files. The copy is built as `<dest>.tmp`, converted to a single self-contained file (no
+`-wal`/`-shm`), checked with `PRAGMA integrity_check`, fsynced and renamed over `<dest>`, so a
+reader sees the previous complete file or the new one, never a partial file. Exit code `0` =
+success, `1` = failure with the reason on stderr (`DATA_DIR is not set`, `database not found`,
+a write error, a failed integrity check), `2` = usage.
+
+```bash
+cd /opt/cloud
+sudo docker compose exec -T api node dist/backup-db.js /data/backups/manual.sqlite
+ls -l /data/backups/                                   # owned by 1000:1000
+sqlite3 /data/backups/manual.sqlite 'PRAGMA integrity_check;'    # ok
+```
+
+From a source checkout the same command is `pnpm --filter @cloud/api build` followed by
+`DATA_DIR=... pnpm --filter @cloud/api backup-db <dest>`.
 
 ### Repository 1: local USB disk
 
@@ -201,10 +223,11 @@ For a dead Pi, a dead data disk, or a corrupted database. You need: the restic r
 6. **Put the database where the API expects it.** The snapshot is a complete database; the
    live one was never backed up. Remove any stale leftovers first:
    ```bash
-   sudo mkdir -p /data/db /data/tmp /data/thumbs
+   sudo mkdir -p /data/db /data/tmp /data/thumbs /data/status
    sudo find /data/db -mindepth 1 -delete
    sudo cp /data/backups/cloud.sqlite /data/db/cloud.sqlite
    sudo chown -R 1000:1000 /data
+   sudo chown root:root /data/status && sudo chmod 0755 /data/status
    ```
 7. **Restore the deployment.** Copy `deploy/` to `/opt/cloud` (`pi-setup.md` section 9), recreate
    `.env` from your off-Pi copy. Use the version you were running, or the newest: a newer
@@ -244,6 +267,9 @@ pass SMART through shows up as a failed unit until you fix it (`apt install smar
 set `SMART_ARGS="-d sat"` / `SMART_DEVICE=/dev/...` in a unit drop-in). Thresholds are
 environment variables of the unit: `MIN_FREE_PERCENT`, `HEALTH_URL`, `HEALTH_CURL_ARGS`.
 
+Every run of the three host scripts also writes a status report that the admin dashboard
+shows (next section), so the same facts are visible without logging in to the Pi.
+
 Look at it:
 
 ```bash
@@ -258,6 +284,74 @@ cd /opt/cloud && sudo docker compose ps               # container health
 `OnFailure=` to the three services pointing at a notifier you control (for example a
 self-hosted ntfy topic); this repository deliberately ships none, so no third party
 learns about your Pi.
+
+## Admin dashboard (system status)
+
+`GET /api/admin/system` (admins only; everyone else gets `404`) returns the data for the
+dashboard page. Two kinds of values:
+
+**Live, read by the API container on each request:** CPU core count and load averages
+(1/5/15 min), CPU temperature, memory (total and available), uptime of the API process,
+free and total bytes of the data disk, the API version.
+
+- Temperature comes from `/sys/class/thermal/thermal_zone0/temp`; if the container cannot read
+  it the value is `null` ("unknown", never 0 degrees).
+- Available memory is `MemAvailable` from `/proc/meminfo` (what can be allocated without
+  swapping), falling back to the free memory reported by Node.
+- Storage is `statfs` on the data directory; `null` if that call fails.
+
+**Host checks, written by the systemd timers' scripts** as JSON files in `/data/status/`
+(readable by the API through the `/data` mount):
+
+| Check          | File                             | Written by        | Stale after |
+| -------------- | -------------------------------- | ----------------- | ----------- |
+| Backup         | `/data/status/backup.json`       | `backup.sh`       | 36 hours    |
+| Restore test   | `/data/status/restore-test.json` | `restore-test.sh` | 40 days     |
+| Health (SMART) | `/data/status/health.json`       | `health-check.sh` | 1 hour      |
+
+The thresholds live in `packages/shared/src/system.ts` (`STALE_AFTER_HOURS`): the nightly backup
+gets one missed night of slack, the monthly restore test a few days of slack over the
+monthly schedule, and the health check (every 15 minutes) four missed runs.
+
+Each check is in exactly one of four states:
+
+| State     | Meaning                                                                                                              | What to do                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ok`      | The last run succeeded and is younger than the stale threshold.                                                      | Nothing.                                                                 |
+| `failing` | The last run reported a problem (`ok: false`). A failing report stays `failing` however old it is.                   | Read the unit's journal (`journalctl -u cloud-<name>.service`).          |
+| `stale`   | The last run succeeded but is older than the threshold: the timer stopped, the Pi was off, or the script cannot run. | `systemctl list-timers 'cloud-*'`, `systemctl --failed`, run it by hand. |
+| `unknown` | There is no report, or it is unreadable, not valid JSON, malformed, or dated more than 5 minutes in the future.      | Normal until the first run after setup; otherwise check `/data/status`.  |
+
+`stale` and `unknown` are never shown as healthy. A check that could not run is also reported as
+not ok: for example `health.json` has `"ok": false` and `"smart": "unavailable"` when
+`smartctl` is missing (the unit exits 2, see Monitoring).
+
+A report is a single small file: `{"ok": true, "checkedAt": "2026-10-13T03:31:07Z", "facts": {...}}`.
+The scripts write it atomically (temp file in the same directory, then `mv`) with mode `0644`,
+as root. `/data/status` is owned by root (`pi-setup.md`) so that the API, which runs as uid 1000,
+can read the reports but not forge them. The facts, all strings:
+
+| File                | Fact                 | Values                                                                |
+| ------------------- | -------------------- | --------------------------------------------------------------------- |
+| `health.json`       | `endpoint`           | HTTP status of the health URL (`000` = no answer), or `unavailable`   |
+|                     | `freePercent`        | free space on `/data` in percent, or `unavailable`                    |
+|                     | `smart`              | `PASSED`, `FAILED` or `unavailable`                                   |
+| `backup.json`       | `repositories`       | number of restic repositories configured for the run                  |
+|                     | `failedRepositories` | how many failed, or `unavailable` if none was attempted               |
+|                     | `snapshot`           | `ok`, `failed` or `not-run` (the database snapshot)                   |
+| `restore-test.json` | `integrity`          | `ok`, `failed` or `not-run` (`PRAGMA integrity_check` on the restore) |
+|                     | `files`              | `<restored>/<listed>` file counts, or `not-run`                       |
+
+Scripts write their report on every exit path, including early failures (restic not installed,
+`/data` not mounted), so a broken setup shows up as `failing` rather than as silence. If the
+report itself cannot be written (for example `/data/status` is missing), the script exits
+non-zero so the unit shows as failed.
+
+Look at the raw reports on the Pi:
+
+```bash
+sudo sh -c 'for f in /data/status/*.json; do echo "$f: $(cat "$f")"; done'
+```
 
 ## Logs and log rotation
 
