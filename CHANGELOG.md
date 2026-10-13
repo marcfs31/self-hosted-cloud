@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-13
+
+### Added
+
+- Install the cloud as an app on your phone or desktop (web app manifest, icons, install
+  button, and an Add to Home Screen hint on iPhone).
+- Works offline for the app shell; file contents and API responses are never cached.
+- An in-app prompt when an update is available.
+- Share files from other Android apps straight into the cloud.
+- Phone photo backup: pick photos and videos, and only the ones not already in the cloud are
+  uploaded (checked by content hash). It runs while the page is open.
+- Take a photo with the camera and upload it directly.
+
 ## [0.10.0] - 2026-10-13
 
 ### Added
