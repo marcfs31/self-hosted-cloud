@@ -54,6 +54,9 @@ export function AppHeader() {
             <li>
               <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
+            <li>
+              <NavLink href="/backup" label={t.pwa.nav.backup} current={pathname === "/backup"} />
+            </li>
             {user.role === "admin" ? (
               <li>
                 <NavLink href="/admin" label={t.common.nav.admin} current={pathname === "/admin"} />
