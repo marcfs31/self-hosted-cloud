@@ -1,4 +1,4 @@
-import { SHARE_CACHE, SHARE_NAME_HEADER, shareKeyPrefix } from "../sw/sw-shared";
+import { SHARE_CACHE, SHARE_NAME_HEADER, pruneShares, shareKeyPrefix } from "../sw/sw-shared";
 
 /**
  * Files received through the Android share sheet. The service worker keeps them in a Cache
@@ -63,4 +63,9 @@ export async function clearShared(id: string): Promise<void> {
       await cache.delete(request);
     }
   }
+}
+
+/** Forgets every shared file older than a day, whichever share it belongs to. */
+export async function pruneSharedFiles(): Promise<void> {
+  await pruneShares(await caches.open(SHARE_CACHE), Date.now());
 }

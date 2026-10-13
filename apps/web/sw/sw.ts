@@ -1,10 +1,10 @@
 import {
   OFFLINE_PATH,
   SHARE_CACHE,
-  SHARE_MAX_AGE_MS,
   SHARE_NAME_HEADER,
   SHARE_TARGET_PATH,
   SHARE_TIME_HEADER,
+  pruneShares,
   routeOf,
   shareKey,
   staticAssetsOf,
@@ -55,6 +55,7 @@ sw.addEventListener("activate", (event) => {
           .filter((name) => name.startsWith("cloud-shell-") && name !== CACHE)
           .map((name) => caches.delete(name)),
       );
+      await pruneOldShares().catch(() => undefined);
       await sw.clients.claim();
     })(),
   );
@@ -108,15 +109,8 @@ async function cacheFirst(request: Request): Promise<Response> {
   return response;
 }
 
-async function forgetOldShares(cache: Cache): Promise<void> {
-  const now = Date.now();
-  for (const key of await cache.keys()) {
-    const stored = await cache.match(key);
-    const at = Number(stored?.headers.get(SHARE_TIME_HEADER));
-    if (!Number.isFinite(at) || now - at > SHARE_MAX_AGE_MS) {
-      await cache.delete(key);
-    }
-  }
+async function pruneOldShares(): Promise<void> {
+  await pruneShares(await caches.open(SHARE_CACHE), Date.now());
 }
 
 /** Keeps the files of a share-sheet POST and sends the browser on to the page that uploads them. */
@@ -125,8 +119,8 @@ async function receiveShare(request: Request): Promise<Response> {
   try {
     const form = await request.formData();
     const files = form.getAll("files").filter((entry): entry is File => entry instanceof File);
+    await pruneOldShares();
     const cache = await caches.open(SHARE_CACHE);
-    await forgetOldShares(cache);
     const sharedAt = String(Date.now());
     await Promise.all(
       files.map((file, index) =>
