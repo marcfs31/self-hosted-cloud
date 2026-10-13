@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { errorResponse, usageResponse } from "@cloud/shared";
+import { DROP_BOX_IDLE_MS } from "../files/in-flight.js";
+import { DROP_BOX_BUDGET_BYTES } from "../files/uploads.js";
 import { ORIGIN, binary, harness, type Harness } from "../testing/harness.js";
 import { createLink, grantCookie, visitor, type Link } from "../testing/shares.js";
 
@@ -180,6 +182,52 @@ describe("drop box: quota", () => {
     // Terminating the owner's upload frees the reservation.
     expect((await a.tusDelete(own.get("Location") ?? "")).status).toBe(204);
     expect((await visitor(h, drop).tusCreate({ filename: "visitor.bin" }, 400)).status).toBe(201);
+  });
+
+  it("an idle visitor reservation never blocks the owner's own uploads", async () => {
+    const h = harness();
+    const { a, inbox, drop } = await setup(h);
+    h.setQuota(a.user.id, 1000);
+    // One bodiless POST that announces the whole quota and never sends a byte.
+    expect((await visitor(h, drop).tusCreate({ filename: "hold.bin" }, 1000)).status).toBe(201);
+    const own = await a.tusCreate({ filename: "mine.bin", parentId: inbox.id }, 10);
+    expect(own.status).toBe(201);
+  });
+
+  it("lets one share announce at most its own budget, whatever the owner's quota", async () => {
+    const h = harness();
+    const { a, drop } = await setup(h);
+    h.setQuota(a.user.id, DROP_BOX_BUDGET_BYTES * 10);
+    const tooBig = await visitor(h, drop).tusCreate(
+      { filename: "huge.bin" },
+      DROP_BOX_BUDGET_BYTES + 1,
+    );
+    expect([tooBig.status, code(tooBig)]).toEqual([413, "quota_exceeded"]);
+    const half = DROP_BOX_BUDGET_BYTES / 2;
+    expect((await visitor(h, drop).tusCreate({ filename: "a.bin" }, half + 1)).status).toBe(201);
+    const second = await visitor(h, drop).tusCreate({ filename: "b.bin" }, half);
+    expect([second.status, code(second)]).toEqual([413, "quota_exceeded"]);
+  });
+
+  it("stops counting a drop-box reservation that sends nothing, but not one that makes progress", async () => {
+    const h = harness();
+    const { a, drop } = await setup(h);
+    h.setQuota(a.user.id, 1000);
+    const v = visitor(h, drop);
+    const idle = await v.tusCreate({ filename: "idle.bin" }, 600);
+    expect(idle.status).toBe(201);
+    expect((await v.tusCreate({ filename: "blocked.bin" }, 600)).status).toBe(413);
+
+    h.clock.t += DROP_BOX_IDLE_MS + 1000;
+    const second = await v.tusCreate({ filename: "second.bin" }, 400);
+    expect(second.status).toBe(201);
+
+    // A PATCH renews the reservation: ten minutes later it still counts, twenty after creation.
+    expect((await v.tusPatch(second.get("Location") ?? "", 0, randomBytes(100))).status).toBe(204);
+    h.clock.t += DROP_BOX_IDLE_MS - 5000;
+    expect((await v.tusCreate({ filename: "third.bin" }, 700)).status).toBe(413);
+    h.clock.t += 10_000;
+    expect((await v.tusCreate({ filename: "third.bin" }, 700)).status).toBe(201);
   });
 
   it("charges the owner, not any session: a visitor needs no account and has no quota of their own", async () => {

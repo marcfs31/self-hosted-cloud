@@ -16,6 +16,7 @@ import type { Db } from "./db/client.js";
 import { rejectBearerOnAccountRoutes } from "./http/bearer.js";
 import { requireSameOrigin } from "./http/csrf.js";
 import { createFilesRouter } from "./files/routes.js";
+import { createInFlightLedger } from "./files/in-flight.js";
 import { UPLOAD_PATH, createUploadService } from "./files/uploads.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
 import { createSystemRouter } from "./system/routes.js";
@@ -66,12 +67,14 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
 
   const sessions = createSessionService({ db, config, now });
 
-  const uploads = createUploadService({ db, config, now });
+  // Bytes promised to an owner's disk by tus and WebDAV transfers share one quota ledger.
+  const ledger = createInFlightLedger(now);
+  const uploads = createUploadService({ db, config, now, ledger });
   const publicShares = createPublicShares({ db, config, now, uploads });
 
   // WebDAV is its own surface: app-password credentials only (never the cookie), no CSRF
   // middleware, and no body parser in front of it, since PUT bodies are streamed to disk.
-  const dav = createDavRouter({ db, config, sessions, now });
+  const dav = createDavRouter({ db, config, sessions, now, ledger });
   app.use("/dav", dav.router);
 
   app.use("/api", requireSameOrigin(config.publicOrigin));

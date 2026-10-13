@@ -27,6 +27,7 @@ import {
 } from "./requests.js";
 import { childOf, resolve, resolveParent, toResource } from "./resolve.js";
 import { storeFile } from "./transfer.js";
+import type { InFlightLedger } from "../files/in-flight.js";
 
 const METHODS = [
   "OPTIONS",
@@ -109,8 +110,9 @@ export function createDavRouter(opts: {
   config: Config;
   sessions: SessionService;
   now: () => number;
+  ledger: InFlightLedger;
 }): DavService {
-  const { db, config, sessions, now } = opts;
+  const { db, config, sessions, now, ledger } = opts;
   const authenticate = createDavAuth({ sessions, now });
   const locks = createLockManager(now);
   const ownHost = new URL(config.publicOrigin).host.toLowerCase();
@@ -172,7 +174,7 @@ export function createDavRouter(opts: {
       }
       const submitted = submittedTokens(req);
       const { created, versionId } = await storeFile(
-        { db, config, now, user, ip },
+        { db, config, now, user, ip, ledger },
         segments,
         { kind: "request", req, declaredLength },
         (existing) => {
@@ -255,6 +257,7 @@ export function createDavRouter(opts: {
         db,
         config,
         now,
+        ledger,
         user,
         ip,
         src,
@@ -291,10 +294,15 @@ export function createDavRouter(opts: {
       if (!row) {
         // Locking an unmapped URL creates an empty file to hold the lock (RFC 4918 section 7.3).
         locks.assertWritable(user.id, segments, submitted, { membership: true });
-        await storeFile({ db, config, now, user, ip }, segments, { kind: "empty" }, (existing) => {
-          // Nothing was there a moment ago; never turn a race into an overwrite.
-          if (existing) throw new DavError(409);
-        });
+        await storeFile(
+          { db, config, now, user, ip, ledger },
+          segments,
+          { kind: "empty" },
+          (existing) => {
+            // Nothing was there a moment ago; never turn a race into an overwrite.
+            if (existing) throw new DavError(409);
+          },
+        );
       }
       const lock = locks.create({
         userId: user.id,

@@ -5,6 +5,7 @@ import type { User } from "@cloud/shared";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { commitFileVersion } from "../files/commit.js";
+import type { InFlightLedger } from "../files/in-flight.js";
 import {
   commitBlob,
   davTempDir,
@@ -18,12 +19,19 @@ import { childOf, resolveParent } from "./resolve.js";
 
 const WRITE_BUFFER = 1024 * 1024;
 
+/** The reservation of a body of unknown length grows by this much ahead of what has arrived. */
+const RESERVE_STEP = 1024 * 1024;
+
 /**
- * Stream a request body to `path`, refusing with 507 as soon as it is longer than `maxBytes`.
- * Done by hand rather than with pipeline(): a failing pipeline destroys the request, and with it
- * the socket the 507 has to travel on.
+ * Stream a request body to `path`. `onBytes` sees the running total before each chunk is
+ * written and throws (507) to refuse it. Done by hand rather than with pipeline(): a failing
+ * pipeline destroys the request, and with it the socket the 507 has to travel on.
  */
-function receiveBody(req: IncomingMessage, path: string, maxBytes: number): Promise<void> {
+function receiveBody(
+  req: IncomingMessage,
+  path: string,
+  onBytes: (received: number) => void,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const out = createWriteStream(path, { flags: "wx", mode: 0o600, highWaterMark: WRITE_BUFFER });
     let received = 0;
@@ -40,9 +48,13 @@ function receiveBody(req: IncomingMessage, path: string, maxBytes: number): Prom
     };
     const onData = (chunk: Buffer): void => {
       received += chunk.length;
-      if (received > maxBytes) {
-        stop(new DavError(507));
-      } else if (!out.write(chunk)) {
+      try {
+        onBytes(received);
+      } catch (err) {
+        stop(err instanceof Error ? err : new Error("upload refused"));
+        return;
+      }
+      if (!out.write(chunk)) {
         req.pause();
         out.once("drain", () => {
           req.resume();
@@ -77,6 +89,7 @@ export interface StoreContext {
   now: () => number;
   user: User;
   ip: string | undefined;
+  ledger: InFlightLedger;
 }
 
 /**
@@ -92,7 +105,7 @@ export async function storeFile(
   body: Body,
   check: (existing: FileRow | undefined) => void,
 ): Promise<{ created: boolean; versionId: string }> {
-  const { db, config, now, user, ip } = ctx;
+  const { db, config, now, user, ip, ledger } = ctx;
   const name = segments.at(-1);
   if (name === undefined) throw new DavError(405);
   const parent = resolveParent(db, user.id, getOrCreateRoot(db, user.id, now()), segments);
@@ -101,21 +114,29 @@ export async function storeFile(
   if (existing?.kind === "folder") throw new DavError(405);
   check(existing);
 
-  const remaining = user.quotaBytes - usedBytes(db, user.id);
-  if (
-    body.kind === "request" &&
-    body.declaredLength !== undefined &&
-    body.declaredLength > remaining
-  ) {
-    throw new DavError(507);
-  }
+  // Reserved before the first byte is read: parallel transfers cannot each see the full headroom.
+  const declared = body.kind === "request" ? body.declaredLength : undefined;
+  const reservationId = crypto.randomUUID();
+  const reservation = { ownerId: user.id, size: 0, touchedAt: now() };
+  const room = (): number =>
+    user.quotaBytes - usedBytes(db, user.id) - (ledger.ownBytes(user.id) - reservation.size);
+  if (declared !== undefined && declared > room()) throw new DavError(507);
+  reservation.size = declared ?? 0;
+  // Checked and reserved in the same tick (no await in between), so concurrent PUTs cannot both fit.
+  ledger.transfers.set(reservationId, reservation);
+  const grow = (received: number): void => {
+    if (received <= reservation.size) return;
+    const available = room();
+    if (received > available) throw new DavError(507);
+    reservation.size = Math.min(received + RESERVE_STEP, available);
+  };
 
   const tempId = crypto.randomUUID();
   const versionId = crypto.randomUUID();
   const tempPath = davTempPath(config.dataDir, tempId);
-  await mkdir(davTempDir(config.dataDir), { recursive: true });
   try {
-    if (body.kind === "request") await receiveBody(body.req, tempPath, remaining);
+    await mkdir(davTempDir(config.dataDir), { recursive: true });
+    if (body.kind === "request") await receiveBody(body.req, tempPath, grow);
     else await writeFile(tempPath, "", { flag: "wx", mode: 0o600 });
     const blob = await commitBlob(config.dataDir, user.id, versionId, tempPath);
     try {
@@ -145,6 +166,7 @@ export async function storeFile(
       throw err;
     }
   } finally {
+    ledger.transfers.delete(reservationId);
     await removeDavTemp(config.dataDir, tempId);
   }
 }

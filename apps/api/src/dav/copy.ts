@@ -3,6 +3,7 @@ import type { User } from "@cloud/shared";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { commitFileVersion } from "../files/commit.js";
+import type { InFlightLedger } from "../files/in-flight.js";
 import { findVersion } from "../files/content.js";
 import { createFolder, trashItem } from "../files/mutations.js";
 import {
@@ -36,6 +37,7 @@ export interface CopyRequest {
   now: () => number;
   user: User;
   ip: string | undefined;
+  ledger: InFlightLedger;
   src: readonly string[];
   dst: readonly string[];
   overwrite: boolean;
@@ -92,14 +94,17 @@ function prepare(tx: Tx, req: CopyRequest) {
  * destination is trashed first (Overwrite: T). Returns true when one was replaced.
  */
 export async function copyTree(req: CopyRequest): Promise<boolean> {
-  const { db, config, user } = req;
+  const { db, config, user, ledger } = req;
   const prepared = req.db.transaction((tx) => {
     const p = prepare(tx, req);
     return { tree: plan(tx, user.id, p.item, p.name, req.shallow), used: usedBytes(tx, user.id) };
   });
   const toCopy = filesOf(prepared.tree);
   const total = toCopy.reduce((sum, f) => sum + f.size, 0);
-  if (prepared.used + total > user.quotaBytes) throw new DavError(507);
+  // The whole copy is reserved before any byte moves, beside every other transfer in flight.
+  if (prepared.used + ledger.ownBytes(user.id) + total > user.quotaBytes) throw new DavError(507);
+  const reservationId = crypto.randomUUID();
+  ledger.transfers.set(reservationId, { ownerId: user.id, size: total, touchedAt: req.now() });
 
   const committed: { versionId: string }[] = [];
   try {
@@ -157,5 +162,7 @@ export async function copyTree(req: CopyRequest): Promise<boolean> {
     for (const { versionId } of committed) await removeBlob(config.dataDir, user.id, versionId);
     if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new DavError(404);
     throw err;
+  } finally {
+    ledger.transfers.delete(reservationId);
   }
 }

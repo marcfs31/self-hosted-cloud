@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readdirSync, utimesSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, statSync, utimesSync, mkdirSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -480,6 +480,131 @@ describe("WebDAV: GET, HEAD and PUT", () => {
     }
     expect((await a.root()).children.map((c) => c.name)).toEqual(["ok.bin"]);
     expect(readdirSync(join(h.dataDir, "tmp", "dav"))).toEqual([]);
+  });
+
+  describe("quota is reserved, not just checked", () => {
+    /** Opens a PUT that sends `first` bytes and then waits; `finish` sends the rest. */
+    function openPut(
+      port: number,
+      auth: string,
+      path: string,
+      first: number,
+      headers: Record<string, string>,
+    ) {
+      let finish: (rest: Buffer) => void = () => undefined;
+      const status = new Promise<number>((resolve, reject) => {
+        const req = http.request(
+          { port, method: "PUT", path, headers: { Authorization: auth, ...headers } },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.write(Buffer.alloc(first));
+        finish = (rest) => req.end(rest);
+      });
+      return {
+        status,
+        finish: (rest: Buffer) => {
+          finish(rest);
+        },
+      };
+    }
+
+    const tempBytes = (dir: string) =>
+      readdirSync(dir).reduce((sum, f) => sum + statSync(join(dir, f)).size, 0);
+
+    it("refuses parallel PUTs that together exceed the quota before they send a byte", async () => {
+      const { h, a, da } = await setup();
+      h.setQuota(a.user.id, 1000);
+      const burst = await Promise.all(
+        Array.from({ length: 6 }, (_, n) => da.put(`/dav/p${String(n)}.bin`, Buffer.alloc(900))),
+      );
+      const statuses = burst.map((res) => res.status).sort();
+      expect(statuses).toEqual([201, 507, 507, 507, 507, 507]);
+      expect(readdirSync(join(h.dataDir, "tmp", "dav"))).toEqual([]);
+    });
+
+    it("never holds more than the quota on disk while chunked bodies are still arriving", async () => {
+      const { h, a, da } = await setup();
+      h.setQuota(a.user.id, 1_000_000);
+      const auth = `Basic ${Buffer.from(`${a.email}:${da.secret}`).toString("base64")}`;
+      const server = h.app.listen(0);
+      try {
+        const port = (server.address() as AddressInfo).port;
+        const puts = Array.from({ length: 6 }, (_, n) =>
+          openPut(port, auth, `/dav/s${String(n)}.bin`, 300_000, {
+            "Transfer-Encoding": "chunked",
+          }),
+        );
+        // Five are refused while streaming; the one that got the reservation stays open.
+        let refused = 0;
+        const open: typeof puts = [];
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error("fewer than five uploads were refused"));
+          }, 4000);
+          puts.forEach((put) => {
+            void put.status.then((code) => {
+              if (code === 507 && ++refused === 5) {
+                clearTimeout(timer);
+                resolve();
+              }
+            });
+          });
+        });
+        for (const put of puts) {
+          const settled = await Promise.race([put.status, Promise.resolve(-1)]);
+          if (settled === -1) open.push(put);
+        }
+        expect(open).toHaveLength(1);
+        expect(tempBytes(join(h.dataDir, "tmp", "dav"))).toBeLessThanOrEqual(1_000_000);
+        open[0]?.finish(Buffer.alloc(600_000));
+        expect(await open[0]?.status).toBe(201);
+      } finally {
+        server.close();
+      }
+    });
+
+    it("counts a transfer in progress against tus, other PUTs and COPY of the same owner", async () => {
+      const { h, a, da } = await setup();
+      await da.put("/dav/src.bin", Buffer.alloc(400));
+      h.setQuota(a.user.id, 1000);
+      const auth = `Basic ${Buffer.from(`${a.email}:${da.secret}`).toString("base64")}`;
+      const server = h.app.listen(0);
+      try {
+        const port = (server.address() as AddressInfo).port;
+        // 500 bytes announced and held open: 400 used + 500 reserved leaves 100.
+        const held = openPut(port, auth, "/dav/held.bin", 10, { "Content-Length": "500" });
+        const dir = join(h.dataDir, "tmp", "dav");
+        for (let i = 0; i < 80 && readdirSync(dir).length === 0; i++) {
+          await new Promise((r) => setTimeout(r, 25)); // a temp file means the reservation exists
+        }
+        expect(readdirSync(dir)).toHaveLength(1);
+        const folderId = (await a.root()).folder.id;
+        const tus = await a.tusCreate({ filename: "t.bin", parentId: folderId }, 200);
+        expect(tus.status).toBe(413);
+        expect((await da.put("/dav/other.bin", Buffer.alloc(200))).status).toBe(507);
+        expect((await da.copy("/dav/src.bin", "/dav/copy.bin")).status).toBe(507);
+        held.finish(Buffer.alloc(490));
+        expect(await held.status).toBe(201);
+      } finally {
+        server.close();
+      }
+    });
+
+    it("counts a tus upload in progress against a PUT", async () => {
+      const { h, a, da } = await setup();
+      h.setQuota(a.user.id, 1000);
+      const created = await a.tusCreate(
+        { filename: "t.bin", parentId: (await a.root()).folder.id },
+        700,
+      );
+      expect(created.status).toBe(201);
+      expect((await da.put("/dav/x.bin", Buffer.alloc(400))).status).toBe(507);
+      expect((await da.put("/dav/y.bin", Buffer.alloc(300))).status).toBe(201);
+    });
   });
 
   it("removes the temp file when the client hangs up mid-upload", async () => {

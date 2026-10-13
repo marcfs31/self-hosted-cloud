@@ -10,11 +10,18 @@ import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { HttpError } from "../http/errors.js";
 import { commitFileVersion } from "./commit.js";
+import { createInFlightLedger, type InFlightLedger } from "./in-flight.js";
 import { commitBlob, isUuid, removeBlob, uploadTempPath, uploadsDir } from "./storage.js";
 import { requireActive, usedBytes } from "./tree.js";
 
 export const UPLOAD_PATH = "/api/uploads";
 const UPLOAD_EXPIRY_MS = 24 * 60 * 60 * 1000;
+/**
+ * A drop-box visitor is anonymous: what they have announced but not yet sent may hold at most
+ * this many bytes per share (so also the largest file a drop box takes), and counts only while
+ * it makes progress. Without this, one bodiless POST reserved the owner's whole quota for 24 h.
+ */
+export const DROP_BOX_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
 const TUS_METHODS = new Set(["OPTIONS", "POST", "HEAD", "PATCH", "DELETE"]);
 
 /**
@@ -74,11 +81,6 @@ function errorBodyFor(status: number, text: string): ErrorCode {
   return codeForStatus(status);
 }
 
-interface InFlight {
-  ownerId: string;
-  size: number;
-}
-
 /** Who a tus request acts for, decided by the caller before the request reaches tus. */
 export interface UploadActor {
   /** Whose files, quota and in-flight bytes the upload belongs to. */
@@ -108,22 +110,18 @@ export function createUploadService(opts: {
   db: Db;
   config: Config;
   now: () => number;
+  ledger?: InFlightLedger;
 }): UploadService {
   const { db, config, now } = opts;
+  const ledger = opts.ledger ?? createInFlightLedger(now);
   const actors = new WeakMap<Request, UploadActor>();
-  const inFlight = new Map<string, InFlight>();
+  const inFlight = ledger.uploads;
   let started: Promise<{ server: Server; store: CommittingStore }> | undefined;
 
   function actorOf(req: Request): UploadActor {
     const actor = actors.get(req);
     if (!actor) throw new TusFailure(401, "unauthenticated");
     return actor;
-  }
-
-  function inFlightBytes(ownerId: string): number {
-    let total = 0;
-    for (const entry of inFlight.values()) if (entry.ownerId === ownerId) total += entry.size;
-    return total;
   }
 
   /** Validate a new upload and reserve its bytes; throws a TusFailure to refuse it. */
@@ -154,11 +152,22 @@ export function createUploadService(opts: {
     } catch (err) {
       throw asTusFailure(err);
     }
-    if (usedBytes(db, user.id) + inFlightBytes(user.id) + upload.size > user.quotaBytes) {
+    if (share && ledger.dropBoxBytes(user.id, share.id) + upload.size > DROP_BOX_BUDGET_BYTES) {
+      throw new TusFailure(413, "quota_exceeded");
+    }
+    // A drop box must fit beside everything the owner has announced; the owner's own upload
+    // only has to fit beside their own, so a stranger's idle reservation never locks them out.
+    const reserved = ledger.ownBytes(user.id) + (share ? ledger.dropBoxBytes(user.id) : 0);
+    if (usedBytes(db, user.id) + reserved + upload.size > user.quotaBytes) {
       throw new TusFailure(413, "quota_exceeded");
     }
     // Checked and reserved in the same tick, so concurrent creations cannot both fit.
-    inFlight.set(upload.id, { ownerId: user.id, size: upload.size });
+    inFlight.set(upload.id, {
+      ownerId: user.id,
+      size: upload.size,
+      touchedAt: now(),
+      ...(share && { shareId: share.id }),
+    });
     return {
       // ownerId is always the session user; anything the client sent is discarded.
       metadata: {
@@ -179,7 +188,13 @@ export function createUploadService(opts: {
       const info = await store.configstore.get(id);
       const ownerId = info?.metadata?.ownerId;
       if (info?.size !== undefined && typeof ownerId === "string") {
-        inFlight.set(id, { ownerId, size: info.size });
+        const shareId = info.metadata?.shareId;
+        inFlight.set(id, {
+          ownerId,
+          size: info.size,
+          touchedAt: now(),
+          ...(typeof shareId === "string" && { shareId }),
+        });
       }
     }
   }
@@ -216,6 +231,8 @@ export function createUploadService(opts: {
           // upload belongs to its share alone, and a session upload to no share.
           const shareId = upload?.metadata?.shareId ?? undefined;
           if (upload?.metadata?.ownerId !== owner.id || shareId !== share?.id) throw notFound;
+          const reserved = inFlight.get(uploadId);
+          if (req.method === "PATCH" && reserved) reserved.touchedAt = now();
         },
 
         onUploadCreate: (req, upload) => Promise.resolve(begin(req, upload)),
