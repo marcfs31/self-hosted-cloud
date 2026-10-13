@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-13
+
+### Added
+
+- The web app speaks English, Portuguese (Portugal), Spanish, Catalan and Italian.
+- Language switcher in the header and on the sign-in pages; the choice is remembered per device.
+- Without a choice, the browser's language is used, falling back to English.
+- Dates and sizes are formatted for the chosen language.
+- End-to-end and accessibility tests run in every language.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added
