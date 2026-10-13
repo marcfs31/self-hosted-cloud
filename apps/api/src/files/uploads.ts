@@ -2,20 +2,16 @@ import { mkdir } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { FileStore } from "@tus/file-store";
 import { Server, Upload } from "@tus/server";
-import { eq } from "drizzle-orm";
 import type { RequestHandler, Response as ExpressResponse } from "express";
 import { z } from "zod";
-import { errorResponse, fileName, uniqueName, type ErrorCode, type User } from "@cloud/shared";
-import { recordActivity } from "../activity/record.js";
+import { errorResponse, fileName, type ErrorCode, type User } from "@cloud/shared";
 import { authOf } from "../auth/sessions.js";
-import { recordChanges } from "../changes/record.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
-import { fileVersions, files, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
-import { mimeForName } from "./mime.js";
+import { commitFileVersion } from "./commit.js";
 import { commitBlob, isUuid, removeBlob, uploadTempPath, uploadsDir } from "./storage.js";
-import { activeSiblingNames, requireActive, usedBytes } from "./tree.js";
+import { requireActive, usedBytes } from "./tree.js";
 
 export const UPLOAD_PATH = "/api/uploads";
 const UPLOAD_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -278,74 +274,19 @@ export function createUploadService(opts: {
       uploadTempPath(config.dataDir, upload.id),
     );
     try {
-      const fileId = db.transaction((tx) => {
-        const owner = tx.select().from(users).where(eq(users.id, ownerId)).get();
-        if (!owner) throw new HttpError(404, "not_found");
-        requireActive(tx, ownerId, parentId, "folder");
-        const replaced =
-          replaceId === undefined ? undefined : requireActive(tx, ownerId, replaceId, "file");
-        if (replaced && replaced.parentId !== parentId) throw new HttpError(404, "not_found");
-        // Authoritative quota check: in-flight reservations were only an early warning.
-        if (usedBytes(tx, ownerId) + blob.size > owner.quotaBytes) {
-          throw new HttpError(413, "quota_exceeded");
-        }
-        const at = new Date(now());
-        const fileId = replaced?.id ?? crypto.randomUUID();
-        const name = replaced?.name ?? uniqueName(filename, activeSiblingNames(tx, parentId));
-        if (replaced) {
-          tx.insert(fileVersions)
-            .values({
-              id: versionId,
-              fileId,
-              ownerId,
-              mime: mimeForName(name),
-              createdAt: at,
-              ...blob,
-            })
-            .run();
-          tx.update(files)
-            .set({ currentVersionId: versionId, updatedAt: at })
-            .where(eq(files.id, fileId))
-            .run();
-        } else {
-          tx.insert(files)
-            .values({
-              id: fileId,
-              ownerId,
-              parentId,
-              name,
-              kind: "file",
-              currentVersionId: versionId,
-              createdAt: at,
-              updatedAt: at,
-            })
-            .run();
-          tx.insert(fileVersions)
-            .values({
-              id: versionId,
-              fileId,
-              ownerId,
-              mime: mimeForName(name),
-              createdAt: at,
-              ...blob,
-            })
-            .run();
-        }
-        recordChanges(tx, ownerId, [fileId], at.getTime());
-        recordActivity(tx, {
-          userId: ownerId,
-          type: "upload",
-          fileId,
-          detail: {
-            name,
-            kind: "file",
-            ...(upload.metadata?.shareId !== undefined && { via: "drop box" }),
-          },
+      const fileId = db.transaction((tx) =>
+        commitFileVersion(tx, {
+          ownerId,
+          parentId,
+          filename,
+          replaceId,
+          versionId,
+          blob,
+          at: now(),
           ip,
-          at: at.getTime(),
-        });
-        return fileId;
-      });
+          via: upload.metadata?.shareId !== undefined ? "drop box" : undefined,
+        }),
+      );
       store.committed.set(
         upload.id,
         new Upload({
