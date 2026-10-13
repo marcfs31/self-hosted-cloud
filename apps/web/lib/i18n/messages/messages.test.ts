@@ -12,6 +12,8 @@ const SAME_AS_ENGLISH: Record<string, readonly Locale[]> = {
   "auth.password": ["it"],
   "admin.users.email": ["it"],
   "admin.users.quota": ["pt-PT", "ca", "it"],
+  "files.table.versions": ["ca"],
+  "files.versions.listLabel": ["ca"],
 };
 
 const SAMPLE_ARGS = ["alice@example.test", "Admin", "13 Oct 2026"];

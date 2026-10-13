@@ -23,7 +23,8 @@ function isErrorCode(value: unknown): value is ErrorCode {
   return typeof value === "string" && Object.hasOwn(englishErrors, value);
 }
 
-function codeFromBody(body: unknown): ErrorCode {
+/** The code in an `{ error: { code } }` body; anything else reads as an internal error. */
+export function errorCodeFromBody(body: unknown): ErrorCode {
   if (typeof body === "object" && body !== null && "error" in body) {
     const inner = body.error;
     if (typeof inner === "object" && inner !== null && "code" in inner && isErrorCode(inner.code)) {
@@ -67,7 +68,7 @@ export async function apiFetch<T = void>(path: string, init: ApiInit = {}): Prom
   }
 
   if (!res.ok) {
-    throw new ApiError(codeFromBody(await readJson(res)), res.status);
+    throw new ApiError(errorCodeFromBody(await readJson(res)), res.status);
   }
   if (res.status === 204) {
     return undefined as T;
