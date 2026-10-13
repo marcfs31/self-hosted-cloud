@@ -18,5 +18,6 @@ export const it: Errors = {
   quota_exceeded: "Non c'è abbastanza spazio libero nel tuo archivio per questo.",
   version_is_current: "Questa è la versione attuale. Ripristina prima un'altra versione.",
   thumbnail_unavailable: "Anteprima non disponibile per questo file.",
+  share_locked: "Questo link è protetto. Inserisci la password per aprirlo.",
   internal: "Qualcosa è andato storto da parte nostra. Riprova tra un attimo.",
 };

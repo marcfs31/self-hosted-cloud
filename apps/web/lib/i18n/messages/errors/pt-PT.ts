@@ -17,5 +17,6 @@ export const ptPT: Errors = {
   quota_exceeded: "Não há espaço suficiente no seu armazenamento para isto.",
   version_is_current: "Esta é a versão atual. Restaure outra versão primeiro.",
   thumbnail_unavailable: "Não há pré-visualização disponível para este ficheiro.",
+  share_locked: "Esta ligação está protegida. Introduza a palavra-passe para a abrir.",
   internal: "Algo correu mal do nosso lado. Tente novamente dentro de instantes.",
 };

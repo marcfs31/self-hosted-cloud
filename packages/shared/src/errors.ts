@@ -20,6 +20,7 @@ export const errorCode = z.enum([
   "quota_exceeded",
   "version_is_current",
   "thumbnail_unavailable",
+  "share_locked",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof errorCode>;

@@ -18,6 +18,7 @@ export const en: Record<ErrorCode, string> = {
   quota_exceeded: "There isn't enough space left in your storage for this.",
   version_is_current: "This is the current version. Restore another version first.",
   thumbnail_unavailable: "A preview isn't available for this file.",
+  share_locked: "This link is protected. Enter the password to open it.",
   internal: "Something went wrong on our side. Please try again in a moment.",
 };
 

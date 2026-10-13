@@ -13,9 +13,12 @@ export const RETRY_DELAYS = [0, 1000, 3000, 5000, 10000];
 
 export interface UploadRequest {
   file: File;
-  parentId: string;
+  /** The destination folder, or null for a drop box, where the server fixes the folder itself. */
+  parentId: string | null;
   /** The file this upload adds a version to, or null for a new file. */
   replaceId: string | null;
+  /** The tus endpoint; the signed-in one when left out. */
+  endpoint?: string;
 }
 
 export interface UploadEvents {
@@ -38,7 +41,7 @@ export interface UploadHandle {
 export function metadataOf(request: UploadRequest): Record<string, string> {
   return {
     filename: request.file.name,
-    parentId: request.parentId,
+    ...(request.parentId === null ? {} : { parentId: request.parentId }),
     ...(request.file.type === "" ? {} : { filetype: request.file.type }),
     ...(request.replaceId === null ? {} : { replaceId: request.replaceId }),
   };
@@ -53,7 +56,7 @@ export function resumesSameTarget(previous: PreviousUpload, request: UploadReque
   return (
     previous.uploadUrl !== null &&
     previous.metadata["filename"] === request.file.name &&
-    previous.metadata["parentId"] === request.parentId &&
+    previous.metadata["parentId"] === (request.parentId ?? undefined) &&
     previous.metadata["replaceId"] === (request.replaceId ?? undefined)
   );
 }
@@ -72,7 +75,7 @@ export function uploadErrorCode(error: Error): ErrorCode {
 
 export function createUpload(request: UploadRequest, events: UploadEvents): UploadHandle {
   const upload = new Upload(request.file, {
-    endpoint: UPLOAD_ENDPOINT,
+    endpoint: request.endpoint ?? UPLOAD_ENDPOINT,
     metadata: metadataOf(request),
     chunkSize: CHUNK_SIZE,
     retryDelays: RETRY_DELAYS,

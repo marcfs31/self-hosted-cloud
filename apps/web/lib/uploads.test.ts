@@ -43,6 +43,30 @@ describe("upload metadata", () => {
   });
 });
 
+describe("drop-box upload metadata", () => {
+  it("sends no parentId: the server fixes the folder", () => {
+    expect(
+      metadataOf(request({ parentId: null, endpoint: "/api/public/shares/t/uploads" })),
+    ).toEqual({ filename: "notes.txt", filetype: "text/plain" });
+  });
+
+  it("resumes a drop-box upload only when the stored one had no folder either", () => {
+    const dropBox = request({ parentId: null });
+    expect(
+      resumesSameTarget(
+        previous({ filename: "notes.txt" }, "/api/public/shares/t/uploads/abc"),
+        dropBox,
+      ),
+    ).toBe(true);
+    expect(
+      resumesSameTarget(
+        previous({ filename: "notes.txt", parentId: "folder-1" }, "/api/uploads/abc"),
+        dropBox,
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("resuming a stored upload", () => {
   const stored = { filename: "notes.txt", parentId: "folder-1" };
 

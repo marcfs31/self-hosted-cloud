@@ -1,0 +1,117 @@
+import type { Shares } from "./en";
+
+export const it: Shares = {
+  title: "Link condivisi",
+  menuShare: "Condividi…",
+  loading: "Caricamento dei tuoi link condivisi…",
+  caption: "I tuoi link condivisi",
+  intro:
+    "Chiunque abbia uno di questi link può aprire ciò che condivide. Un link viene mostrato una sola volta, quando lo crei.",
+  columns: {
+    item: "Elemento",
+    kind: "Tipo",
+    dropBox: "Cartella di consegna",
+    password: "Password",
+    created: "Creato",
+    expires: "Scade",
+    actions: "Azioni",
+  },
+  kind: {
+    file: "File",
+    folder: "Cartella",
+  },
+  yes: "Sì",
+  no: "No",
+  never: "Mai",
+  expired: (date) => `${date} (scaduto)`,
+  empty: {
+    title: "Non hai ancora condiviso nulla",
+    hint: "Scegli Condividi… nel menu di un file o di una cartella per creare un link.",
+  },
+  revoke: "Revoca",
+  revokeLabel: (name) => `Revoca il link a ${name}`,
+  confirm: {
+    title: "Revocare questo link?",
+    body: (name) => `Chi ha il link a ${name} perderà subito l'accesso. Non si può annullare.`,
+    cancel: "Annulla",
+    submit: "Revoca il link",
+    submitting: "Revoca in corso…",
+  },
+  notices: {
+    revoked: (name) => `Link a ${name} revocato`,
+  },
+  password: {
+    show: "Mostra la password",
+    hide: "Nascondi la password",
+  },
+  share: {
+    title: (name) => `Condividi ${name}`,
+    expiryLabel: "Il link scade",
+    expiry: {
+      "1": "Dopo 1 giorno",
+      "7": "Dopo 7 giorni",
+      "30": "Dopo 30 giorni",
+      "365": "Dopo 1 anno",
+      never: "Mai",
+    },
+    passwordLabel: "Password (facoltativa)",
+    passwordHint: "Almeno 8 caratteri. Inviala separatamente dal link.",
+    passwordTooShort: "Usa almeno 8 caratteri oppure lascia vuota la password.",
+    dropBox:
+      "Consenti ad altri di caricare file (cartella di consegna: non vedono il contenuto della cartella)",
+    submit: "Crea link",
+    submitting: "Creazione…",
+    cancel: "Annulla",
+    created: {
+      title: "Il tuo link è pronto",
+      linkLabel: "Link",
+      copy: "Copia link",
+      copied: "Link copiato.",
+      copyFailed: "Non è stato possibile copiarlo in automatico. Seleziona il link e copialo tu.",
+      once: "Questa è l'unica volta in cui il link viene mostrato. Copialo adesso; se lo perdi, creane uno nuovo.",
+      expires: (date) => `Funziona fino al ${date}.`,
+      neverExpires: "Funziona finché non lo revochi.",
+      protected: "Per aprirlo servirà la password.",
+      manage: "Puoi revocarlo in qualsiasi momento dalla pagina Link condivisi.",
+      done: "Fatto",
+    },
+  },
+  public: {
+    pageTitle: "Link condiviso",
+    loading: "Apertura del link…",
+    expiresOn: (date) => `Questo link funziona fino al ${date}.`,
+    notFound: {
+      title: "Questo link non funziona",
+      body: "Potrebbe essere scaduto, essere stato rimosso da chi lo ha creato o essere scritto male. Chiedi un nuovo link a chi te lo ha inviato.",
+    },
+    locked: {
+      title: "Questo link è protetto",
+      body: "Inserisci la password che ti è stata data per aprirlo.",
+      label: "Password",
+      submit: "Apri",
+      submitting: "Verifica in corso…",
+      wrong: "Quella password non è corretta. Riprova.",
+    },
+    file: {
+      size: (size) => `Dimensione: ${size}`,
+      download: "Scarica",
+    },
+    folder: {
+      caption: (folder) => `Contenuto di ${folder}`,
+      empty: "Non c'è nulla in questa cartella.",
+      download: "Scarica",
+      downloadLabel: (name) => `Scarica ${name}`,
+      downloadAll: "Scarica tutto (.zip)",
+    },
+    dropbox: {
+      title: (name) => `Invia file a ${name}`,
+      intro:
+        "I tuoi file vanno direttamente nella cartella. Non vedrai cosa c'è dentro, e nemmeno chiunque altro abbia questo link.",
+      choose: "Scegli i file",
+      dropHint: "oppure rilascia qui i file",
+      dropActive: "Rilascia i file per inviarli",
+      full: "Questi file non ci stanno: lo spazio di chi li riceve è pieno.",
+      gone: "Questa cartella di consegna è stata chiusa. Chiedi un nuovo link a chi l'ha condivisa.",
+    },
+  },
+};

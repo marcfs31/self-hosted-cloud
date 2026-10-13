@@ -103,6 +103,7 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Files",
     "Photos",
+    "Shared links",
     "Trash",
     "Admin",
   ]);
@@ -146,7 +147,7 @@ test("the row menu works from the keyboard", async () => {
   await page.keyboard.press("Enter");
   const items = page.getByRole("menuitem");
   await expect(items.first()).toBeFocused();
-  await expect(items).toHaveText(["Open", "Rename", "Move…", "Move to trash"]);
+  await expect(items).toHaveText(["Open", "Rename", "Move…", "Share…", "Move to trash"]);
   await page.keyboard.press("ArrowDown");
   await expect(items.nth(1)).toBeFocused();
   await page.keyboard.press("End");

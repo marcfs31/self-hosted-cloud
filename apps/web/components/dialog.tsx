@@ -8,11 +8,13 @@ interface DialogProps {
   onClose: () => void;
   /**
    * Gets the focus back when the dialog goes away; the page's main area otherwise. A function
-   * is asked when the dialog closes, for a target that changes while it is open.
+   * is called at that moment, for a target that changes while the dialog is open.
    */
-  returnFocus?: HTMLElement | null | (() => HTMLElement | null);
+  returnFocus?: HTMLElement | (() => HTMLElement | null) | null;
   /** Nearly the full width, for content like a photo. */
   wide?: boolean;
+  /** Extra class on the <dialog>, for a variant such as the full-screen preview. */
+  className?: string;
   children: ReactNode;
 }
 
@@ -20,7 +22,14 @@ interface DialogProps {
  * A modal built on the native <dialog>: the browser makes the rest of the page inert, traps
  * focus and closes on Escape. Mount it to open it and unmount it to close it.
  */
-export function Dialog({ title, onClose, returnFocus, wide = false, children }: DialogProps) {
+export function Dialog({
+  title,
+  onClose,
+  returnFocus,
+  wide = false,
+  className,
+  children,
+}: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const returnTo = useRef(returnFocus);
@@ -34,9 +43,8 @@ export function Dialog({ title, onClose, returnFocus, wide = false, children }: 
       dialog.showModal();
     }
     dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-    const wanted = returnTo.current;
     return () => {
-      const target = typeof wanted === "function" ? wanted() : wanted;
+      const target = typeof returnTo.current === "function" ? returnTo.current() : returnTo.current;
       const back = target?.isConnected ? target : document.getElementById("main");
       back?.focus();
     };
@@ -45,7 +53,7 @@ export function Dialog({ title, onClose, returnFocus, wide = false, children }: 
   return (
     <dialog
       ref={ref}
-      className={wide ? "dialog dialog-wide" : "dialog"}
+      className={["dialog", wide ? "dialog-wide" : "", className ?? ""].filter(Boolean).join(" ")}
       aria-labelledby={titleId}
       onClose={onClose}
     >
