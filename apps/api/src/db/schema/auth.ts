@@ -19,6 +19,8 @@ export const sessions = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     userAgent: text("user_agent"),
+    /** True until the second factor of a password sign-in has been confirmed. */
+    mfaPending: integer("mfa_pending", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
