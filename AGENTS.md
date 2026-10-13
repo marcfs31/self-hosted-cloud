@@ -20,6 +20,8 @@ resume — not conversation memory).
 6. **Secrets are stored hashed:** passwords with Argon2id, session/share/invite tokens as
    SHA-256. A raw token is shown once and never logged.
 7. **No telemetry, no third-party requests, no remote fonts or scripts.**
+8. **Every UI string exists in en, pt-PT, es, ca and it in the same change.** `en` is the source;
+   the other locales are typed from it, and `messages.test.ts` fails on empty or untranslated values.
 
 ## Gate (identical to CI)
 
