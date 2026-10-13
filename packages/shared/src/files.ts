@@ -15,7 +15,8 @@ import { z } from "zod";
  *                                        attachment. Served inline only for INLINE_MIME_TYPES,
  *                                        otherwise as an attachment of application/octet-stream.
  *                                        Always sends X-Content-Type-Options: nosniff and
- *                                        Content-Security-Policy: sandbox; default-src 'none'.
+ *                                        Content-Security-Policy: sandbox; default-src 'none';
+ *                                        img-src 'self'; media-src 'self'; style-src 'unsafe-inline'.
  *   GET    /usage                      → UsageResponse
  *
  * Version history (files only; every upload or replace adds a version):
@@ -62,7 +63,14 @@ export const INLINE_MIME_TYPES = [
   "text/plain",
 ] as const;
 
-const FORBIDDEN_NAME = /[/\\\u0000-\u001f\u007f]/;
+/** Path separators, C0 control characters and DEL. */
+function hasForbiddenChar(name: string): boolean {
+  for (const ch of name) {
+    const code = ch.charCodeAt(0);
+    if (ch === "/" || ch === "\\" || code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
 
 export const fileName = z
   .string()
@@ -72,7 +80,7 @@ export const fileName = z
       .string()
       .min(1)
       .max(255)
-      .refine((s) => !FORBIDDEN_NAME.test(s), "contains a forbidden character")
+      .refine((s) => !hasForbiddenChar(s), "contains a forbidden character")
       .refine((s) => s !== "." && s !== "..", "reserved name")
       .refine((s) => s.trim() === s, "leading or trailing whitespace"),
   );
