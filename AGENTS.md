@@ -36,14 +36,14 @@ annotated tag `vX.Y.Z`. `pnpm versions:check` fails if manifests or changelog di
 
 ## Where to edit
 
-| Need                                    | Place                                                                                | Not                           |
-| --------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------- |
-| A new endpoint's request/response shape | `packages/shared/src/*.ts`                                                           | inline types in api or web    |
-| An error the UI shows                   | add the code to `errorCode` in `packages/shared`, copy in `apps/web/lib/messages.ts` | free-text errors from the API |
-| A DB table/column                       | `apps/api/src/db/schema.ts` + `pnpm --filter @cloud/api db:generate`                 | hand-written SQL migrations   |
-| A new env variable                      | `apps/api/src/config.ts` (zod) + `.env.example` + `deploy/`                          | `process.env` elsewhere       |
-| A UI string                             | `apps/web/lib/messages.ts`                                                           | component files               |
-| A colour/spacing value                  | CSS variables in `apps/web/app/globals.css`                                          | raw hex in components         |
+| Need                                    | Place                                                                                                               | Not                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| A new endpoint's request/response shape | `packages/shared/src/*.ts`                                                                                          | inline types in api or web    |
+| An error the UI shows                   | add the code to `errorCode` in `packages/shared`, copy in `apps/web/lib/messages.ts`                                | free-text errors from the API |
+| A DB table/column                       | `apps/api/src/db/schema/<feature>.ts` (re-exported from `schema/index.ts`) + `pnpm --filter @cloud/api db:generate` | hand-written SQL migrations   |
+| A new env variable                      | `apps/api/src/config.ts` (zod) + `.env.example` + `deploy/`                                                         | `process.env` elsewhere       |
+| A UI string                             | `apps/web/lib/messages.ts`                                                                                          | component files               |
+| A colour/spacing value                  | CSS variables in `apps/web/app/globals.css`                                                                         | raw hex in components         |
 
 ## Out of scope unless asked
 
