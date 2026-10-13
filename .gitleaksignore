@@ -1,0 +1,2 @@
+# RFC 6238 appendix B test vector (base32 of the public seed "12345678901234567890"), not a secret.
+de5b677b0c9fcad0acdf4326c7e3cf9f3171949a:apps/web/e2e/security.spec.ts:generic-api-key:69
