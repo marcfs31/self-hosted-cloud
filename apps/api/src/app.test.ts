@@ -7,12 +7,14 @@ import { healthResponse } from "@cloud/shared";
 import { createApp } from "./app.js";
 import type { Config } from "./config.js";
 import { openDatabase } from "./db/client.js";
+import { TEST_SECRET_KEY } from "./testing/secret-key.js";
 
 const config = (dataDir: string): Config => ({
   production: false,
   port: 0,
   dataDir,
   publicOrigin: "http://localhost:3000",
+  secretKey: TEST_SECRET_KEY,
 });
 
 describe("GET /api/health", () => {

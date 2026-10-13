@@ -27,7 +27,9 @@ import { breadcrumb, fileKind } from "./files.js";
  *   GET    /public/shares/:token/zip?folderId=<id>       → application/zip, streamed, store-only
  *   tus    /public/shares/:token/uploads                 → drop-box uploads into the shared folder
  *            (same tus rules as /uploads but parentId is fixed to the shared folder, replaceId is
- *            not allowed, names collide to "name (1).ext", the owner's quota applies)
+ *            not allowed, names collide to "name (1).ext", the owner's quota applies).
+ *            Creations (POST, empty files included, refused ones too) are limited to 100 per visitor
+ *            address and share per hour and 1000 per share per day → 429 too_many_attempts.
  *   Folder-browse endpoints on a drop box, and uploads on a non-drop-box share → 404 not_found.
  * State-changing public requests still require Origin === PUBLIC_ORIGIN.
  */

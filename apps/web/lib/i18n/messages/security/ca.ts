@@ -143,6 +143,38 @@ export const ca: Security = {
     revoking: "Revocant…",
     revoked: (name) => `Contrasenya d'aplicació «${name}» revocada.`,
   },
+  stepUp: {
+    intro: "Per protegir el teu compte, confirma que ets tu abans de continuar.",
+    loading: "Carregant…",
+    passwordRequired: "Introdueix la teva contrasenya.",
+    codeLabel: "Codi de l'aplicació o codi de recuperació",
+    codeHint:
+      "Els 6 dígits que mostra ara mateix la teva aplicació d'autenticació. Un codi de recuperació també serveix.",
+    codeRequired: "Introdueix el codi de la teva aplicació d'autenticació.",
+    wrongPassword: "Aquesta contrasenya no és correcta. Revisa-la i torna-ho a provar.",
+  },
+  password: {
+    title: "La teva contrasenya",
+    intro:
+      "Tria una contrasenya nova. Continuaràs amb la sessió iniciada aquí i es tancarà la sessió a tots els altres dispositius.",
+    currentLabel: "Contrasenya actual",
+    newLabel: "Contrasenya nova",
+    submit: "Canvia la contrasenya",
+    submitting: "Canviant…",
+    done: "Contrasenya canviada. S'ha tancat la sessió als altres dispositius.",
+  },
+  sessions: {
+    title: "Dispositius amb la sessió iniciada",
+    intro:
+      "Has iniciat la sessió en algun lloc que ja no fas servir o has perdut un dispositiu? Tanca la sessió a tots els altres. Aquí continuaràs amb la sessió iniciada.",
+    button: "Tanca la sessió als altres dispositius",
+    confirmTitle: "Tancar la sessió als altres dispositius?",
+    confirmBody:
+      "Es tancarà la sessió de seguida a tots els altres navegadors i dispositius, i hauran de tornar a demanar la teva contrasenya. Les contrasenyes d'aplicació continuen funcionant.",
+    confirmSubmit: "Tanca la sessió",
+    confirming: "Tancant la sessió…",
+    done: "S'ha tancat la sessió a tots els altres dispositius.",
+  },
   admin: {
     resetMfa: "Restableix la verificació en dos passos",
     resetMfaFor: (email) => `Restableix la verificació en dos passos de ${email}`,

@@ -28,6 +28,7 @@ export const en = {
     totp_enabled: "Two-step verification turned on",
     totp_disabled: "Two-step verification turned off",
     mfa_reset_by_admin: "Two-step verification reset by an admin",
+    password_changed: "Password changed",
     app_password_created: "App password created",
     app_password_revoked: "App password revoked",
     upload: "File uploaded",

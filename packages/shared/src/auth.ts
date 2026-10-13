@@ -61,6 +61,12 @@ export const registerRequest = z.object({
 });
 export type RegisterRequest = z.input<typeof registerRequest>;
 
+export const changePasswordRequest = z.object({
+  currentPassword: z.string().min(1).max(1024),
+  newPassword: newPasswordField,
+});
+export type ChangePasswordRequest = z.input<typeof changePasswordRequest>;
+
 export const meResponse = z.object({ user });
 export type MeResponse = z.infer<typeof meResponse>;
 

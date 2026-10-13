@@ -138,6 +138,37 @@ export const en = {
     revoking: "Revoking…",
     revoked: (name: string) => `App password “${name}” revoked.`,
   },
+  stepUp: {
+    intro: "To protect your account, confirm it's you before continuing.",
+    loading: "Loading…",
+    passwordRequired: "Enter your password.",
+    codeLabel: "Code from your app or a recovery code",
+    codeHint: "The 6 digits your authenticator app shows right now. A recovery code works too.",
+    codeRequired: "Enter the code from your authenticator app.",
+    wrongPassword: "That password isn't right. Check it and try again.",
+  },
+  password: {
+    title: "Your password",
+    intro:
+      "Choose a new password. You'll stay signed in here, and every other device will be signed out.",
+    currentLabel: "Current password",
+    newLabel: "New password",
+    submit: "Change password",
+    submitting: "Changing…",
+    done: "Password changed. Other devices have been signed out.",
+  },
+  sessions: {
+    title: "Signed-in devices",
+    intro:
+      "Signed in somewhere you no longer use, or lost a device? Sign out of every other device. You'll stay signed in here.",
+    button: "Sign out of other devices",
+    confirmTitle: "Sign out of other devices?",
+    confirmBody:
+      "Every other browser and device will be signed out straight away and will need your password again. App passwords keep working.",
+    confirmSubmit: "Sign out",
+    confirming: "Signing out…",
+    done: "Signed out of all other devices.",
+  },
   admin: {
     resetMfa: "Reset two-step verification",
     resetMfaFor: (email: string) => `Reset two-step verification for ${email}`,

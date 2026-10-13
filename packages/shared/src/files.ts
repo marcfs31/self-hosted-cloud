@@ -66,6 +66,8 @@ export const INLINE_MIME_TYPES = [
   "text/plain",
 ] as const;
 
+export const MAX_FILE_NAME_LENGTH = 255;
+
 /** Path separators, C0 control characters and DEL. */
 function hasForbiddenChar(name: string): boolean {
   for (const ch of name) {
@@ -82,7 +84,7 @@ export const fileName = z
     z
       .string()
       .min(1)
-      .max(255)
+      .max(MAX_FILE_NAME_LENGTH)
       .refine((s) => !hasForbiddenChar(s), "contains a forbidden character")
       .refine((s) => s !== "." && s !== "..", "reserved name")
       .refine((s) => s.trim() === s, "leading or trailing whitespace"),
@@ -154,18 +156,38 @@ export const usageResponse = z.object({
 });
 export type UsageResponse = z.infer<typeof usageResponse>;
 
+/** First `max` UTF-16 units of `s`, without cutting a surrogate pair in half. */
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cutsPair =
+    max > 0 &&
+    s.charCodeAt(max - 1) >= 0xd800 &&
+    s.charCodeAt(max - 1) <= 0xdbff &&
+    s.charCodeAt(max) >= 0xdc00 &&
+    s.charCodeAt(max) <= 0xdfff;
+  return s.slice(0, cutsPair ? max - 1 : max);
+}
+
 /**
  * Collision policy for uploads and restores: "report.pdf" → "report (1).pdf" → "report (2).pdf".
- * Folders and dotfiles without an extension get the suffix at the end.
+ * Folders and dotfiles without an extension get the suffix at the end. The result is always a
+ * valid fileName length (255): when the suffix would overflow, the stem is shortened (never
+ * through a surrogate pair) and the extension kept; an extension too long to leave room for any
+ * stem is treated as part of the stem.
  */
 export function uniqueName(name: string, taken: ReadonlySet<string>): string {
   if (!taken.has(name)) return name;
   const dot = name.lastIndexOf(".");
   const hasExt = dot > 0;
-  const stem = hasExt ? name.slice(0, dot) : name;
-  const ext = hasExt ? name.slice(dot) : "";
   for (let n = 1; ; n++) {
-    const candidate = `${stem} (${n})${ext}`;
+    const suffix = ` (${n})`;
+    let stem = hasExt ? name.slice(0, dot) : name;
+    let ext = hasExt ? name.slice(dot) : "";
+    if (MAX_FILE_NAME_LENGTH - suffix.length - ext.length < 1) {
+      stem = name;
+      ext = "";
+    }
+    const candidate = `${truncate(stem, MAX_FILE_NAME_LENGTH - suffix.length - ext.length)}${suffix}${ext}`;
     if (!taken.has(candidate)) return candidate;
   }
 }

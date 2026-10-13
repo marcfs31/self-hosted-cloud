@@ -144,6 +144,38 @@ export const es: Security = {
     revoking: "Revocando…",
     revoked: (name) => `Contraseña de aplicación «${name}» revocada.`,
   },
+  stepUp: {
+    intro: "Para proteger tu cuenta, confirma que eres tú antes de continuar.",
+    loading: "Cargando…",
+    passwordRequired: "Introduce tu contraseña.",
+    codeLabel: "Código de la aplicación o código de recuperación",
+    codeHint:
+      "Los 6 dígitos que muestra ahora mismo tu aplicación de autenticación. También sirve un código de recuperación.",
+    codeRequired: "Introduce el código de tu aplicación de autenticación.",
+    wrongPassword: "Esa contraseña no es correcta. Revísala e inténtalo de nuevo.",
+  },
+  password: {
+    title: "Tu contraseña",
+    intro:
+      "Elige una contraseña nueva. Seguirás con la sesión iniciada aquí y se cerrará la sesión en todos los demás dispositivos.",
+    currentLabel: "Contraseña actual",
+    newLabel: "Contraseña nueva",
+    submit: "Cambiar contraseña",
+    submitting: "Cambiando…",
+    done: "Contraseña cambiada. Se cerró la sesión en los demás dispositivos.",
+  },
+  sessions: {
+    title: "Dispositivos con sesión iniciada",
+    intro:
+      "¿Iniciaste sesión en algún sitio que ya no usas o perdiste un dispositivo? Cierra la sesión en todos los demás. Aquí seguirás con la sesión iniciada.",
+    button: "Cerrar sesión en los demás dispositivos",
+    confirmTitle: "¿Cerrar sesión en los demás dispositivos?",
+    confirmBody:
+      "Se cerrará la sesión de inmediato en todos los demás navegadores y dispositivos, y tendrán que volver a pedir tu contraseña. Las contraseñas de aplicación siguen funcionando.",
+    confirmSubmit: "Cerrar sesión",
+    confirming: "Cerrando sesión…",
+    done: "Sesión cerrada en todos los demás dispositivos.",
+  },
   admin: {
     resetMfa: "Restablecer la verificación en dos pasos",
     resetMfaFor: (email) => `Restablecer la verificación en dos pasos de ${email}`,

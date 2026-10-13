@@ -1,6 +1,11 @@
-import { readFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { eq, sql } from "drizzle-orm";
+import Database from "better-sqlite3";
+import { asc, eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -15,7 +20,7 @@ import {
 } from "@cloud/shared";
 import { changes, files } from "../db/schema/index.js";
 import { purgeExpiredTrash } from "../files/trash.js";
-import { harness, type Harness } from "../testing/harness.js";
+import { PASSWORD, harness, type Harness } from "../testing/harness.js";
 import { createLink, visitor } from "../testing/shares.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -57,6 +62,20 @@ function deletes(list: Change[]): string[] {
 
 function code(res: { body: unknown }): string {
   return errorResponse.parse(res.body).error.code;
+}
+
+const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
+const cursorV2 = (s: number) => b64({ v: 2, s });
+const cursorV1 = (s: number) => b64({ v: 1, s });
+
+/** The position inside the cursor the server returned (its own, per-user sequence). */
+function positionOf(cursor: string): number {
+  const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+    v: number;
+    s: number;
+  };
+  expect(parsed.v).toBe(2);
+  return parsed.s;
 }
 
 async function setup() {
@@ -352,10 +371,10 @@ describe("change feed: reading", () => {
     expect(upserts(seenByB).map((n) => n.id)).toEqual([bRoot.id, mine.id]);
     expect(JSON.stringify(seenByB)).not.toContain(secret);
     expect(JSON.stringify(seenByB)).not.toContain("secret.txt");
-    // Not even deletes of A's items leak through a cursor taken from A's feed.
-    const fromA = await drain(b, await mark(a));
-    expect(deletes(fromA.changes)).toEqual([]);
-    expect(upserts(fromA.changes).every((n) => [bRoot.id, mine.id].includes(n.id))).toBe(true);
+    // Not even deletes of A's items show up in B's feed after a cursor.
+    const fromStart = await drain(b, await mark(b));
+    expect(fromStart.changes).toEqual([]);
+    expect(deletes((await drain(b, cursorV2(0))).changes)).toEqual([]);
   });
 
   it("requires authentication", async () => {
@@ -368,7 +387,7 @@ describe("change feed: reading", () => {
   it("an app password (Bearer) can read the feed", async () => {
     const { h, a, root } = await setup();
     const dir = await a.mkdir(root.id, "Docs");
-    const created = await a.post("/api/auth/app-passwords", { name: "cli" });
+    const created = await a.post("/api/auth/app-passwords", { name: "cli", password: PASSWORD });
     expect(created.status).toBe(201);
     const { token } = createdAppPasswordResponse.parse(created.body);
 
@@ -383,13 +402,18 @@ describe("change feed: reading", () => {
   it("rejects malformed, forged and unknown cursors and out-of-range limits with 400", async () => {
     const { a } = await setup();
     const real = await mark(a);
-    const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
     const bad = [
       "garbage",
       "not base64 !!",
       Buffer.from("not json").toString("base64url"),
       b64({ v: 1 }),
-      b64({ v: 2, s: 1 }),
+      b64({ v: 3, s: 1 }),
+      b64({ v: 2 }),
+      b64({ v: 2, s: -1 }),
+      b64({ v: 2, s: 1.5 }),
+      b64({ v: 2, s: "1" }),
+      b64({ v: 2, s: 1, extra: true }),
+      b64({ v: 2, s: 999_999 }), // beyond anything issued to this user
       b64({ v: 1, s: -1 }),
       b64({ v: 1, s: 1.5 }),
       b64({ v: 1, s: "1" }),
@@ -445,48 +469,269 @@ describe("change feed: atomic with the mutation", () => {
   });
 });
 
-describe("change feed: migration backfill", () => {
-  it("gives every file that existed before the feed one row, so a new client sees everything", async () => {
+function ownerSeqs(h: Harness, ownerId: string): number[] {
+  return h.db
+    .select({ s: changes.ownerSeq })
+    .from(changes)
+    .where(eq(changes.ownerId, ownerId))
+    .orderBy(asc(changes.seq))
+    .all()
+    .map((r) => r.s);
+}
+
+describe("change feed: per-user sequence", () => {
+  it("gives each owner its own gap-free 1..n sequence while two users interleave writes", async () => {
     const { h, a, root } = await setup();
-    const dir = await a.mkdir(root.id, "Dir");
-    const f = await a.upload(dir.id, "a.txt", Buffer.from("a"));
-    const gone = await a.upload(root.id, "gone.txt", Buffer.from("g"));
-    await a.del(`/api/files/${gone}`);
     const b = await h.member("b@example.com");
     const bRoot = (await b.root()).folder;
 
-    // An existing install: files, no change rows.
-    h.db.delete(changes).run();
-    expect(h.db.select().from(changes).all()).toEqual([]);
-    const backfill = readFileSync(
-      fileURLToPath(new URL("../../drizzle/0007_changes_backfill.sql", import.meta.url)),
-      "utf8",
-    );
-    h.db.run(sql.raw(backfill));
-
-    const everyFile = h.db.select({ id: files.id, ownerId: files.ownerId }).from(files).all();
-    const rows = h.db.select().from(changes).all();
-    expect(rows.map((r) => r.fileId).sort()).toEqual(everyFile.map((r) => r.id).sort());
-    for (const row of rows) {
-      expect(row.ownerId).toBe(everyFile.find((x) => x.id === row.fileId)?.ownerId);
+    for (let i = 0; i < 6; i++) {
+      await a.mkdir(root.id, `a${i}`);
+      await b.mkdir(bRoot.id, `b${i}`);
+      if (i % 2 === 0) await a.upload(root.id, `a${i}.txt`, Buffer.from("x"));
     }
+    // One operation that records several items at once: a folder with a child, trashed.
+    const dir = await a.mkdir(root.id, "bulk");
+    await a.upload(dir.id, "in.txt", Buffer.from("1"));
+    await a.del(`/api/files/${dir.id}`);
 
-    const sync = await drain(a);
-    expect(
-      upserts(sync.changes)
-        .map((n) => n.id)
-        .sort(),
-    ).toEqual([root.id, dir.id, f].sort());
-    expect(deletes(sync.changes)).toEqual([]);
-    expect(upserts((await drain(b)).changes).map((n) => n.id)).toEqual([bRoot.id]);
-    // And the feed keeps working on top of the backfilled rows.
-    const newer = await a.mkdir(root.id, "New");
-    expect(upserts((await drain(a, sync.cursor)).changes).map((n) => n.id)).toEqual([newer.id]);
+    for (const user of [a.user, b.user]) {
+      const seqs = ownerSeqs(h, user.id);
+      expect(seqs.length).toBeGreaterThan(6);
+      expect(seqs).toEqual(seqs.map((_, i) => i + 1));
+    }
+    // The global order really interleaved, so the shared counter is neither user's sequence.
+    const globalOrder = h.db.select().from(changes).orderBy(asc(changes.seq)).all();
+    expect(globalOrder.some((r, i) => i > 0 && r.ownerId !== globalOrder[i - 1]?.ownerId)).toBe(
+      true,
+    );
+    expect(Math.max(...globalOrder.map((r) => r.seq))).toBeGreaterThan(
+      ownerSeqs(h, a.user.id).length,
+    );
   });
 
-  it("a fresh database has the changes table with its owner/seq index", () => {
+  it("cursors count only the user's own changes: another user's activity never moves them", async () => {
+    const { h, a, root } = await setup();
+    const b = await h.member("b@example.com");
+    const bRoot = (await b.root()).folder;
+    await b.mkdir(bRoot.id, "one");
+    const before = await mark(b);
+    expect(positionOf(before)).toBe(ownerSeqs(h, b.user.id).length);
+
+    // A writes a lot; B's cursor and B's feed do not change at all.
+    for (let i = 0; i < 25; i++) await a.upload(root.id, `f${i}.txt`, Buffer.from("x"));
+    expect(await feed(b, before)).toEqual({ changes: [], cursor: before, hasMore: false });
+    expect(positionOf(await mark(b))).toBe(positionOf(before));
+    // A's cursor is A's own count, not the global one (which also includes B's rows).
+    const aPosition = positionOf(await mark(a));
+    expect(aPosition).toBe(ownerSeqs(h, a.user.id).length);
+    expect(h.db.select().from(changes).all().length).toBeGreaterThan(aPosition);
+  });
+
+  it("a cursor of a busier user is refused for a quieter one, never interpreted", async () => {
+    const { a, root, h } = await setup();
+    const b = await h.member("b@example.com");
+    for (let i = 0; i < 10; i++) await a.upload(root.id, `f${i}.txt`, Buffer.from("x"));
+    await b.root();
+    const aCursor = await mark(a);
+    expect(positionOf(aCursor)).toBeGreaterThan(10);
+    const res = await b.get(`/api/changes?cursor=${encodeURIComponent(aCursor)}`);
+    expect([res.status, code(res)]).toEqual([400, "invalid_request"]);
+  });
+
+  it("still accepts a v1 cursor (the old global seq) and answers with a v2 one", async () => {
+    const { h, a, root } = await setup();
+    const b = await h.member("b@example.com");
+    const bRoot = (await b.root()).folder;
+    const first = await a.mkdir(root.id, "first");
+    await b.mkdir(bRoot.id, "interleaved");
+    const second = await a.mkdir(root.id, "second");
+    const third = await a.mkdir(root.id, "third");
+
+    const row = h.db.select().from(changes).where(eq(changes.fileId, first.id)).get();
+    expect(row?.ownerId).toBe(a.user.id);
+    const v1 = cursorV1(row?.seq ?? -1);
+
+    const resumed = await drain(a, v1);
+    expect(upserts(resumed.changes).map((n) => n.id)).toEqual([second.id, third.id]);
+    expect(positionOf(resumed.cursor)).toBe(ownerSeqs(h, a.user.id).length);
+    // The same place as the equivalent v2 cursor.
+    expect(await feed(a, v1)).toEqual(await feed(a, cursorV2(row?.ownerSeq ?? -1)));
+    // Once translated, the client keeps going on v2.
+    expect(await feed(a, resumed.cursor)).toEqual({
+      changes: [],
+      cursor: resumed.cursor,
+      hasMore: false,
+    });
+    // v1 position 0 means "after the very beginning".
+    expect(upserts((await drain(a, cursorV1(0))).changes).map((n) => n.id)).toEqual([
+      root.id,
+      first.id,
+      second.id,
+      third.id,
+    ]);
+  });
+
+  it("a v1 cursor must be one of the user's own rows: no oracle on other users' volume", async () => {
+    const { h, a, root } = await setup();
+    const b = await h.member("b@example.com");
+    const bRoot = (await b.root()).folder;
+    await a.mkdir(root.id, "x");
+    const theirs = await b.mkdir(bRoot.id, "theirs");
+    const bRow = h.db.select().from(changes).where(eq(changes.fileId, theirs.id)).get();
+    // B's row has a perfectly real global seq, but it is not A's.
+    const foreign = await a.get(
+      `/api/changes?cursor=${encodeURIComponent(cursorV1(bRow?.seq ?? -1))}`,
+    );
+    expect([foreign.status, code(foreign)]).toEqual([400, "invalid_request"]);
+    const beyond = await a.get(`/api/changes?cursor=${encodeURIComponent(cursorV1(10_000))}`);
+    expect([beyond.status, code(beyond)]).toEqual([400, "invalid_request"]);
+  });
+
+  it("the unique (owner, owner_seq) index rejects a duplicated position", async () => {
+    const { h, root } = await setup();
+    const row = h.db.select().from(changes).where(eq(changes.fileId, root.id)).get();
+    expect(row).toBeDefined();
+    expect(() =>
+      h.db
+        .insert(changes)
+        .values({
+          ownerId: row?.ownerId ?? "",
+          ownerSeq: row?.ownerSeq ?? 0,
+          fileId: "x",
+          createdAt: new Date(),
+        })
+        .run(),
+    ).toThrow(/UNIQUE/);
+  });
+
+  it("a fresh database has the unique owner/owner_seq index", () => {
     const h = harness();
-    const idx = h.db.all<{ name: string }>(sql`pragma index_list('changes')`).map((r) => r.name);
-    expect(idx).toContain("changes_owner_seq_idx");
+    const idx = h.db
+      .all<{ name: string; unique: number }>(sql`pragma index_list('changes')`)
+      .find((r) => r.name === "changes_owner_owner_seq_idx");
+    expect(idx?.unique).toBe(1);
+  });
+});
+
+describe("change feed: migration to per-user sequences", () => {
+  const drizzleDir = fileURLToPath(new URL("../../drizzle", import.meta.url));
+
+  /** A copy of the migrations that stops after `lastTag`, to build an older installation. */
+  function migrationsUpTo(lastTag: string): string {
+    const out = mkdtempSync(join(tmpdir(), "cloud-migrations-"));
+    mkdirSync(join(out, "meta"));
+    const journal = JSON.parse(readFileSync(join(drizzleDir, "meta/_journal.json"), "utf8")) as {
+      entries: { tag: string }[];
+    };
+    const upTo = journal.entries.findIndex((e) => e.tag === lastTag);
+    expect(upTo).toBeGreaterThanOrEqual(0);
+    journal.entries = journal.entries.slice(0, upTo + 1);
+    writeFileSync(join(out, "meta/_journal.json"), JSON.stringify(journal));
+    for (const e of journal.entries)
+      cpSync(join(drizzleDir, `${e.tag}.sql`), join(out, `${e.tag}.sql`));
+    return out;
+  }
+
+  it("an installation from before the feed gets one row per file, numbered per owner", () => {
+    const sqlite = new Database(":memory:");
+    sqlite.pragma("foreign_keys = ON");
+    const db = drizzle(sqlite);
+    migrate(db, { migrationsFolder: migrationsUpTo("0006_changes") });
+    const user = sqlite.prepare(
+      "insert into users (id, email, password_hash, role, quota_bytes, created_at) values (?, ?, 'x', 'member', 1, 0)",
+    );
+    user.run("ua", "a@example.com");
+    user.run("ub", "b@example.com");
+    const file = sqlite.prepare(
+      "insert into files (id, owner_id, parent_id, name, kind, created_at, updated_at) values (?, ?, null, ?, 'folder', 0, 0)",
+    );
+    file.run("fa", "ua", "");
+    file.run("fb", "ub", "");
+    sqlite
+      .prepare(
+        "insert into files (id, owner_id, parent_id, name, kind, created_at, updated_at) values ('fa2', 'ua', 'fa', 'x', 'folder', 1, 1)",
+      )
+      .run();
+
+    migrate(db, { migrationsFolder: drizzleDir });
+    const rows = sqlite
+      .prepare("select owner_id, owner_seq, file_id from changes order by owner_id, owner_seq")
+      .all();
+    expect(rows).toEqual([
+      { owner_id: "ua", owner_seq: 1, file_id: "fa" },
+      { owner_id: "ua", owner_seq: 2, file_id: "fa2" },
+      { owner_id: "ub", owner_seq: 1, file_id: "fb" },
+    ]);
+  });
+
+  it("numbers existing rows 1..n per owner in the order they were written", () => {
+    const sqlite = new Database(":memory:");
+    sqlite.pragma("foreign_keys = ON");
+    const db = drizzle(sqlite);
+    migrate(db, { migrationsFolder: migrationsUpTo("0007_changes_backfill") });
+
+    const user = sqlite.prepare(
+      "insert into users (id, email, password_hash, role, quota_bytes, created_at) values (?, ?, 'x', 'member', 1, 0)",
+    );
+    user.run("ua", "a@example.com");
+    user.run("ub", "b@example.com");
+    const insert = sqlite.prepare(
+      "insert into changes (owner_id, file_id, created_at) values (?, ?, 0)",
+    );
+    // Interleaved, as a shared instance produces them, with a gap left by a cascaded owner.
+    for (const [owner, file] of [
+      ["ua", "a1"],
+      ["ub", "b1"],
+      ["ub", "b2"],
+      ["ua", "a2"],
+      ["ua", "a1"],
+      ["ub", "b1"],
+      ["ua", "a3"],
+    ] as const) {
+      insert.run(owner, file);
+    }
+    sqlite
+      .prepare(
+        "insert into users (id, email, password_hash, role, quota_bytes, created_at) values ('uc', 'c@example.com', 'x', 'member', 1, 0)",
+      )
+      .run();
+    insert.run("uc", "c1");
+    sqlite.prepare("delete from users where id = 'uc'").run();
+    const seqBefore = sqlite
+      .prepare("select owner_id, seq, file_id from changes order by seq")
+      .all();
+
+    migrate(db, { migrationsFolder: drizzleDir });
+
+    const after = sqlite
+      .prepare("select owner_id, owner_seq, seq, file_id from changes order by seq")
+      .all() as { owner_id: string; owner_seq: number; seq: number; file_id: string }[];
+    expect(after.map((r) => [r.owner_id, r.seq, r.file_id])).toEqual(
+      seqBefore.map((r) => {
+        const x = r as { owner_id: string; seq: number; file_id: string };
+        return [x.owner_id, x.seq, x.file_id];
+      }),
+    );
+    expect(after.filter((r) => r.owner_id === "ua").map((r) => r.owner_seq)).toEqual([1, 2, 3, 4]);
+    expect(after.filter((r) => r.owner_id === "ub").map((r) => r.owner_seq)).toEqual([1, 2, 3]);
+    // The table keeps working: constraints, FK cascade and the global counter all survived.
+    expect(() =>
+      sqlite
+        .prepare(
+          "insert into changes (owner_id, owner_seq, file_id, created_at) values ('ua', 4, 'dup', 0)",
+        )
+        .run(),
+    ).toThrow(/UNIQUE/);
+    sqlite.prepare("delete from users where id = 'ub'").run();
+    expect(sqlite.prepare("select count(*) as n from changes where owner_id = 'ub'").get()).toEqual(
+      { n: 0 },
+    );
+    const next = sqlite
+      .prepare(
+        "insert into changes (owner_id, owner_seq, file_id, created_at) values ('ua', 5, 'ok', 0)",
+      )
+      .run();
+    expect(Number(next.lastInsertRowid)).toBeGreaterThan(Math.max(...after.map((r) => r.seq)));
   });
 });

@@ -8,9 +8,11 @@ import { createChangesRouter } from "./changes/routes.js";
 import { createDavRouter } from "./dav/routes.js";
 import { createAppPasswordRouter } from "./auth/app-passwords.js";
 import { createMfaRouter } from "./auth/mfa-routes.js";
+import { createPasswordRouter } from "./auth/password-routes.js";
 import { createPasskeyRouter } from "./auth/passkeys.js";
 import { createAuthRouter } from "./auth/routes.js";
 import { createSessionService } from "./auth/sessions.js";
+import { createStepUp } from "./auth/step-up.js";
 import type { Config } from "./config.js";
 import type { Db } from "./db/client.js";
 import { rejectBearerOnAccountRoutes } from "./http/bearer.js";
@@ -66,6 +68,7 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
   app.set("trust proxy", 1); // behind Caddy
 
   const sessions = createSessionService({ db, config, now });
+  const stepUp = createStepUp({ db, secretKey: config.secretKey, now });
 
   // Bytes promised to an owner's disk by tus and WebDAV transfers share one quota ledger.
   const ledger = createInFlightLedger(now);
@@ -95,14 +98,15 @@ export function createApp({ config, version, db, now = Date.now, media }: AppOpt
   });
 
   app.use(["/api/auth", "/api/admin"], rejectBearerOnAccountRoutes);
-  app.use("/api/auth/passkeys", createPasskeyRouter({ db, config, sessions, now }));
-  app.use("/api/auth/app-passwords", createAppPasswordRouter({ db, sessions, now }));
+  app.use("/api/auth/passkeys", createPasskeyRouter({ db, config, sessions, stepUp, now }));
+  app.use("/api/auth/app-passwords", createAppPasswordRouter({ db, sessions, stepUp, now }));
   app.use("/api/auth", createAuthRouter({ db, sessions, now }));
   app.use(
     "/api/admin/system",
     createSystemRouter({ sessions, dataDir: config.dataDir, version, now }),
   );
-  app.use("/api/auth", createMfaRouter({ db, sessions, now }));
+  app.use("/api/auth", createMfaRouter({ db, sessions, now, secretKey: config.secretKey }));
+  app.use("/api/auth", createPasswordRouter({ db, sessions, stepUp, now }));
   app.use("/api/admin", createAdminRouter({ db, sessions, now }));
   app.use("/api/activity", createActivityRouter({ db, sessions }));
   app.use("/api", createPhotosRouter({ db, sessions, config, ...(media && { tools: media }) }));
