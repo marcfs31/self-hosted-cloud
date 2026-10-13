@@ -1,7 +1,7 @@
 import { meResponse } from "@cloud/shared";
 import { JSON_OPTION, parseCommandArgs, type Command } from "../args.js";
 import { ApiClient } from "../client.js";
-import { loadConfig, saveConfig } from "../config.js";
+import { assertSecureServer, loadConfig, saveConfig } from "../config.js";
 import { CliError, EXIT, usageError } from "../errors.js";
 import { printJson } from "../format.js";
 import { readLine, readSecret } from "../prompt.js";
@@ -18,6 +18,7 @@ export function normalizeServer(input: string): string {
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw usageError(`The server address must start with https:// or http://: ${input}`);
   }
+  assertSecureServer(url.origin);
   return url.origin;
 }
 
@@ -34,7 +35,8 @@ echo. It is never printed. The login is stored in $CLOUD_CONFIG_DIR/config.json,
 $XDG_CONFIG_HOME/cloud/config.json, else ~/.config/cloud/config.json (directory 0700, file 0600).
 
 Options:
-  --server URL    Address of your cloud (asked for when not stored yet; CLOUD_SERVER also works)
+  --server URL    Address of your cloud (asked for when not stored yet; CLOUD_SERVER also works).
+                  Plain http:// is refused except for localhost, 127.0.0.1 and [::1].
   --email EMAIL   Check that the app password belongs to this account
   --json          Print machine-readable JSON on stdout`,
   async run(argv, io) {

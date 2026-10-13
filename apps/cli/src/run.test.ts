@@ -128,4 +128,20 @@ describe("normalizeServer", () => {
   it("refuses other schemes", () => {
     expect(() => normalizeServer("ftp://x")).toThrow(/https/);
   });
+
+  it("refuses plain http except to this machine, naming the https alternative", () => {
+    for (const bad of ["http://cloud.example.com", "http://192.168.1.20:3000", "http://[::2]"]) {
+      expect(() => normalizeServer(bad)).toThrow(/Refusing .*http:\/\/.*https:\/\//s);
+    }
+    expect(normalizeServer("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(normalizeServer("http://127.0.0.1:4000/x")).toBe("http://127.0.0.1:4000");
+    expect(normalizeServer("http://[::1]:4000")).toBe("http://[::1]:4000");
+    expect(normalizeServer("https://cloud.example.com")).toBe("https://cloud.example.com");
+  });
+
+  it("exits 1 from the command line for a remote http server", async () => {
+    const res = await cli(["login", "--server", "http://cloud.example.com"]);
+    expect(res.code).toBe(1);
+    expect(res.err).toContain("https://");
+  });
 });
