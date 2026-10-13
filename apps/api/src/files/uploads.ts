@@ -6,7 +6,9 @@ import { eq } from "drizzle-orm";
 import type { RequestHandler, Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { errorResponse, fileName, uniqueName, type ErrorCode, type User } from "@cloud/shared";
+import { recordActivity } from "../activity/record.js";
 import { authOf } from "../auth/sessions.js";
+import { recordChanges } from "../changes/record.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { fileVersions, files, users } from "../db/schema/index.js";
@@ -89,6 +91,8 @@ export interface UploadActor {
   path: string;
   /** Set for drop-box uploads: they land in `folderId` and can only be continued via this share. */
   share?: { id: string; folderId: string };
+  /** Client address for the owner's activity log; never set for drop boxes (a visitor's IP is not the owner's data). */
+  ip?: string | undefined;
 }
 
 export interface UploadService {
@@ -220,9 +224,9 @@ export function createUploadService(opts: {
 
         onUploadCreate: (req, upload) => Promise.resolve(begin(req, upload)),
 
-        onUploadFinish: async (_req, upload) => {
+        onUploadFinish: async (req, upload) => {
           try {
-            const fileId = await finish(store, upload);
+            const fileId = await finish(store, upload, actorOf(req).ip);
             return { headers: { "Cloud-File-Id": fileId } };
           } catch (err) {
             throw asTusFailure(err);
@@ -251,7 +255,11 @@ export function createUploadService(opts: {
     return started;
   }
 
-  async function finish(store: CommittingStore, upload: Upload): Promise<string> {
+  async function finish(
+    store: CommittingStore,
+    upload: Upload,
+    ip: string | undefined,
+  ): Promise<string> {
     const ownerId = upload.metadata?.ownerId;
     const parsed = uploadMetadata.safeParse(upload.metadata ?? {});
     if (typeof ownerId !== "string" || !isUuid(ownerId) || !parsed.success) {
@@ -323,6 +331,19 @@ export function createUploadService(opts: {
             })
             .run();
         }
+        recordChanges(tx, ownerId, [fileId], at.getTime());
+        recordActivity(tx, {
+          userId: ownerId,
+          type: "upload",
+          fileId,
+          detail: {
+            name,
+            kind: "file",
+            ...(upload.metadata?.shareId !== undefined && { via: "drop box" }),
+          },
+          ip,
+          at: at.getTime(),
+        });
         return fileId;
       });
       store.committed.set(
@@ -389,7 +410,7 @@ export function createUploadService(opts: {
   }
 
   const handler: RequestHandler = (req, res, next) => {
-    serve({ owner: authOf(res).user, path: UPLOAD_PATH }, req, res).catch(next);
+    serve({ owner: authOf(res).user, path: UPLOAD_PATH, ip: req.ip }, req, res).catch(next);
   };
 
   async function cleanup(): Promise<void> {
