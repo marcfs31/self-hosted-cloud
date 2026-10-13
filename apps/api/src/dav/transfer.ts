@@ -43,8 +43,12 @@ function receiveBody(
       req.off("end", onEnd);
       req.off("close", onClose);
       req.pause();
+      // Rejected only once closed: an open still pending would otherwise create the temp file
+      // after the caller has already removed it.
+      out.once("close", () => {
+        reject(err);
+      });
       out.destroy();
-      reject(err);
     };
     const onData = (chunk: Buffer): void => {
       received += chunk.length;
