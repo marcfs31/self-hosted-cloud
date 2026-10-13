@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
-import { messages } from "../../lib/messages";
+import { LocaleSwitcher } from "../../components/locale-switcher";
+import { getT } from "../../lib/i18n/server";
 
-export default function AuthLayout({ children }: { children: ReactNode }) {
+export default async function AuthLayout({ children }: { children: ReactNode }) {
+  const t = await getT();
   return (
     <main className="auth">
-      <p className="brand">{messages.app.name}</p>
+      <div className="auth-top">
+        <p className="brand">{t.common.app.name}</p>
+        <LocaleSwitcher />
+      </div>
       {children}
     </main>
   );

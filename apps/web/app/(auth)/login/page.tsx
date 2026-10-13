@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { LoginForm } from "../../../components/login-form";
-import { messages } from "../../../lib/messages";
+import { getT } from "../../../lib/i18n/server";
 
-export const metadata: Metadata = { title: messages.login.title };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT()).auth.loginTitle };
+}
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const t = await getT();
   return (
     <>
-      <h1>{messages.login.title}</h1>
+      <h1>{t.auth.loginTitle}</h1>
       <LoginForm />
     </>
   );

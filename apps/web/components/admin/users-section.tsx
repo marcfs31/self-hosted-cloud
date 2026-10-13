@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
-import type { ListUsersResponse, Role, UpdateUserRequest, User } from "@cloud/shared";
-import { apiFetch, errorMessage } from "../../lib/api";
-import { formatBytes, formatDate, parseGiB, toGiBInput } from "../../lib/format";
-import { messages } from "../../lib/messages";
+import type { ErrorCode, ListUsersResponse, Role, UpdateUserRequest, User } from "@cloud/shared";
+import { apiFetch, errorCodeOf } from "../../lib/api";
+import { parseGiB, toGiBInput } from "../../lib/i18n/format";
+import { useFormat, useT } from "../../lib/i18n/provider";
 import { useForm } from "../../lib/use-form";
 import { Field, FormAlert } from "../form";
 
-const t = messages.admin.users;
 const ROLES: readonly Role[] = ["admin", "member"];
 
 function UserRow({
@@ -20,6 +19,9 @@ function UserRow({
   isSelf: boolean;
   onSaved: (user: User) => void;
 }) {
+  const all = useT();
+  const t = all.admin.users;
+  const format = useFormat();
   const form = useForm();
   const formId = useId();
   const quotaRef = useRef<HTMLInputElement>(null);
@@ -63,7 +65,7 @@ function UserRow({
       </td>
       <td data-label={t.role}>
         {isSelf ? (
-          messages.roles[user.role]
+          all.common.roles[user.role]
         ) : (
           <>
             <label htmlFor={`${formId}-role`} className="sr-only">
@@ -81,7 +83,7 @@ function UserRow({
             >
               {ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {messages.roles[r]}
+                  {all.common.roles[r]}
                 </option>
               ))}
             </select>
@@ -90,7 +92,7 @@ function UserRow({
       </td>
       <td data-label={t.quota}>
         {isSelf ? (
-          formatBytes(user.quotaBytes)
+          format.bytes(user.quotaBytes)
         ) : (
           <Field
             id={`${formId}-quota`}
@@ -111,7 +113,7 @@ function UserRow({
           />
         )}
       </td>
-      <td data-label={t.created}>{formatDate(user.createdAt)}</td>
+      <td data-label={t.created}>{format.date(user.createdAt)}</td>
       <td data-label={t.actions}>
         {isSelf ? null : (
           <form id={formId} onSubmit={onSubmit} className="row-actions">
@@ -136,8 +138,10 @@ function UserRow({
 }
 
 export function UsersSection({ me }: { me: User }) {
+  const all = useT();
+  const t = all.admin.users;
   const [users, setUsers] = useState<User[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<ErrorCode | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +153,7 @@ export function UsersSection({ me }: { me: User }) {
         }
       } catch (e) {
         if (!cancelled) {
-          setLoadError(errorMessage(e));
+          setLoadError(errorCodeOf(e));
         }
       }
     }
@@ -164,7 +168,7 @@ export function UsersSection({ me }: { me: User }) {
       <h2 id="users-heading">{t.title}</h2>
       {loadError ? (
         <p role="alert" className="alert">
-          {loadError}
+          {all.errors[loadError]}
         </p>
       ) : users === null ? (
         <p role="status">{t.loading}</p>

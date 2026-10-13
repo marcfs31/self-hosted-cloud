@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import { SetupForm } from "../../../components/setup-form";
-import { messages } from "../../../lib/messages";
+import { getT } from "../../../lib/i18n/server";
 
-export const metadata: Metadata = { title: messages.setup.title };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT()).auth.setupTitle };
+}
 
-export default function SetupPage() {
+export default async function SetupPage() {
+  const t = await getT();
   return (
     <>
-      <h1>{messages.setup.title}</h1>
-      <p>{messages.setup.intro}</p>
+      <h1>{t.auth.setupTitle}</h1>
+      <p>{t.auth.setupIntro}</p>
       <SetupForm />
     </>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type SubmitEvent } from "react";
-import { messages } from "../lib/messages";
+import { useT } from "../lib/i18n/provider";
 import { useForm } from "../lib/use-form";
 import { Field, FormAlert, SubmitButton } from "./form";
 
@@ -16,6 +16,7 @@ interface Props {
 
 /** Email + new password + confirmation, shared by first-run setup and invite acceptance. */
 export function AccountForm({ submitLabel, busyLabel, action }: Props) {
+  const t = useT();
   const form = useForm();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,11 +27,11 @@ export function AccountForm({ submitLabel, busyLabel, action }: Props) {
   function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (password.length < MIN_PASSWORD_LENGTH) {
-      form.fail(messages.account.passwordTooShort, passwordRef);
+      form.fail(t.auth.passwordTooShort, passwordRef);
       return;
     }
     if (password !== confirm) {
-      form.fail(messages.account.passwordMismatch, confirmRef);
+      form.fail(t.auth.passwordMismatch, confirmRef);
       return;
     }
     void form.submit(() => action(email, password));
@@ -40,7 +41,7 @@ export function AccountForm({ submitLabel, busyLabel, action }: Props) {
     <form onSubmit={onSubmit} className="stack">
       <Field
         id="email"
-        label={messages.account.email}
+        label={t.auth.email}
         type="email"
         autoComplete="email"
         required
@@ -51,8 +52,8 @@ export function AccountForm({ submitLabel, busyLabel, action }: Props) {
       />
       <Field
         id="password"
-        label={messages.account.password}
-        hint={messages.account.passwordHint}
+        label={t.auth.password}
+        hint={t.auth.passwordHint}
         type="password"
         autoComplete="new-password"
         required
@@ -65,7 +66,7 @@ export function AccountForm({ submitLabel, busyLabel, action }: Props) {
       />
       <Field
         id="confirm"
-        label={messages.account.confirm}
+        label={t.auth.confirmPassword}
         type="password"
         autoComplete="new-password"
         required

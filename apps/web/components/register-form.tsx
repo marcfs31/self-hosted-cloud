@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { RegisterRequest } from "@cloud/shared";
 import { apiFetch } from "../lib/api";
-import { messages } from "../lib/messages";
+import { useT } from "../lib/i18n/provider";
 import { AccountForm } from "./account-form";
 
 export function RegisterForm() {
   const router = useRouter();
+  const t = useT();
   const token = useSearchParams().get("token");
 
   if (!token) {
     return (
       <p role="alert" className="alert">
-        {messages.register.missingToken}
+        {t.auth.registerMissingToken}
       </p>
     );
   }
@@ -22,8 +23,8 @@ export function RegisterForm() {
   return (
     <>
       <AccountForm
-        submitLabel={messages.register.submit}
-        busyLabel={messages.register.submitting}
+        submitLabel={t.auth.registerSubmit}
+        busyLabel={t.auth.registerSubmitting}
         action={async (email, password) => {
           const body: RegisterRequest = { token, email, password };
           await apiFetch("/auth/register", { method: "POST", json: body });
@@ -31,7 +32,7 @@ export function RegisterForm() {
         }}
       />
       <p className="note">
-        {messages.register.haveAccount} <Link href="/login">{messages.register.loginLink}</Link>
+        {t.auth.registerHaveAccount} <Link href="/login">{t.auth.registerLoginLink}</Link>
       </p>
     </>
   );

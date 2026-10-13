@@ -10,12 +10,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { MeResponse, SetupStatusResponse, User } from "@cloud/shared";
-import { ApiError, errorMessage, apiFetch } from "./api";
-import { messages } from "./messages";
+import type { ErrorCode, MeResponse, SetupStatusResponse, User } from "@cloud/shared";
+import { ApiError, errorCodeOf, apiFetch } from "./api";
+import { useT } from "./i18n/provider";
 
 type State =
-  { status: "loading" } | { status: "failed"; message: string } | { status: "ready"; user: User };
+  { status: "loading" } | { status: "failed"; code: ErrorCode } | { status: "ready"; user: User };
 
 interface Session {
   user: User;
@@ -47,6 +47,7 @@ function loginUrl(): string {
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const t = useT();
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -64,7 +65,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (!(e instanceof ApiError && e.status === 401)) {
-          setState({ status: "failed", message: errorMessage(e) });
+          setState({ status: "failed", code: errorCodeOf(e) });
           return;
         }
         try {
@@ -74,7 +75,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           }
         } catch (inner) {
           if (!stale()) {
-            setState({ status: "failed", message: errorMessage(inner) });
+            setState({ status: "failed", code: errorCodeOf(inner) });
           }
         }
       }
@@ -109,7 +110,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return (
       <main className="container stack">
         <p role="alert" className="alert">
-          {state.message}
+          {t.errors[state.code]}
         </p>
         <button
           type="button"
@@ -119,14 +120,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             setAttempt((n) => n + 1);
           }}
         >
-          {messages.app.retry}
+          {t.common.app.retry}
         </button>
       </main>
     );
   }
   return (
     <main className="container">
-      <p role="status">{messages.app.loading}</p>
+      <p role="status">{t.common.app.loading}</p>
     </main>
   );
 }

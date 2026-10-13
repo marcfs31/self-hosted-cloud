@@ -4,13 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState, type SubmitEvent } from "react";
 import type { LoginRequest } from "@cloud/shared";
 import { apiFetch } from "../lib/api";
-import { messages } from "../lib/messages";
+import { useT } from "../lib/i18n/provider";
 import { safeNextPath } from "../lib/session";
 import { useForm } from "../lib/use-form";
 import { Field, FormAlert, SubmitButton } from "./form";
 
 export function LoginForm() {
   const router = useRouter();
+  const t = useT();
   const form = useForm();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +30,7 @@ export function LoginForm() {
       <form onSubmit={onSubmit} className="stack">
         <Field
           id="email"
-          label={messages.login.email}
+          label={t.auth.email}
           type="email"
           autoComplete="username"
           required
@@ -40,7 +41,7 @@ export function LoginForm() {
         />
         <Field
           id="password"
-          label={messages.login.password}
+          label={t.auth.password}
           type="password"
           autoComplete="current-password"
           required
@@ -52,11 +53,11 @@ export function LoginForm() {
         <FormAlert form={form} />
         <SubmitButton
           busy={form.busy}
-          label={messages.login.submit}
-          busyLabel={messages.login.submitting}
+          label={t.auth.loginSubmit}
+          busyLabel={t.auth.loginSubmitting}
         />
       </form>
-      <p className="note">{messages.login.noAccount}</p>
+      <p className="note">{t.auth.loginNoAccount}</p>
     </>
   );
 }

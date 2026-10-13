@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { errorMessage } from "../lib/api";
-import { messages } from "../lib/messages";
+import type { ErrorCode } from "@cloud/shared";
+import { errorCodeOf } from "../lib/api";
+import { useT } from "../lib/i18n/provider";
 import { useSession } from "../lib/session";
+import { LocaleSwitcher } from "./locale-switcher";
 
 function NavLink({ href, label, current }: { href: string; label: string; current: boolean }) {
   return (
@@ -16,10 +18,11 @@ function NavLink({ href, label, current }: { href: string; label: string; curren
 }
 
 export function AppHeader() {
+  const t = useT();
   const { user, logout } = useSession();
   const pathname = usePathname();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorCode | null>(null);
 
   async function onLogout() {
     setBusy(true);
@@ -27,7 +30,7 @@ export function AppHeader() {
     try {
       await logout();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(errorCodeOf(e));
       setBusy(false);
     }
   }
@@ -35,23 +38,24 @@ export function AppHeader() {
   return (
     <header className="app-header">
       <a href="#main" className="skip-link">
-        {messages.app.skipToContent}
+        {t.common.app.skipToContent}
       </a>
       <div className="container header-inner">
-        <span className="brand">{messages.app.name}</span>
-        <nav aria-label={messages.app.mainNavLabel}>
+        <span className="brand">{t.common.app.name}</span>
+        <nav aria-label={t.common.app.mainNavLabel}>
           <ul className="nav-list">
             <li>
-              <NavLink href="/" label={messages.nav.files} current={pathname === "/"} />
+              <NavLink href="/" label={t.common.nav.files} current={pathname === "/"} />
             </li>
             {user.role === "admin" ? (
               <li>
-                <NavLink href="/admin" label={messages.nav.admin} current={pathname === "/admin"} />
+                <NavLink href="/admin" label={t.common.nav.admin} current={pathname === "/admin"} />
               </li>
             ) : null}
           </ul>
         </nav>
         <div className="header-user">
+          <LocaleSwitcher />
           <span className="user-email">{user.email}</span>
           <button
             type="button"
@@ -62,14 +66,14 @@ export function AppHeader() {
               void onLogout();
             }}
           >
-            {busy ? messages.nav.loggingOut : messages.nav.logout}
+            {busy ? t.common.nav.loggingOut : t.common.nav.logout}
           </button>
         </div>
       </div>
       {error ? (
         <div className="container">
           <p role="alert" className="alert">
-            {error}
+            {t.errors[error]}
           </p>
         </div>
       ) : null}

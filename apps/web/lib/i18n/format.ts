@@ -1,14 +1,19 @@
+import type { Locale } from "./locales";
+
 const GIB = 1024 ** 3;
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
 
-function trim(value: number, digits: number): string {
-  return String(Number(value.toFixed(digits)));
+function trim(value: number, digits: number): number {
+  return Number(value.toFixed(digits));
 }
 
-/** Binary units with at most one decimal: 1536 → "1.5 KiB", 1610612736 → "1.5 GiB". */
-export function formatBytes(bytes: number): string {
+/**
+ * Binary units with at most one decimal in the locale's number format:
+ * 1610612736 → "1.5 GiB" (en), "1,5 GiB" (es).
+ */
+export function formatBytes(bytes: number, locale: Locale): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
-    return "0 B";
+    return `${new Intl.NumberFormat(locale).format(0)} B`;
   }
   let unit = 0;
   let value = bytes;
@@ -17,11 +22,15 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   // 1048575 B rounds to "1024 KiB"; show "1 MiB" instead.
-  if (unit < UNITS.length - 1 && Number(value.toFixed(1)) >= 1024) {
+  if (unit < UNITS.length - 1 && trim(value, 1) >= 1024) {
     value /= 1024;
     unit += 1;
   }
-  return `${trim(value, unit === 0 ? 0 : 1)} ${UNITS[unit] ?? "B"}`;
+  const digits = unit === 0 ? 0 : 1;
+  const text = new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(
+    trim(value, digits),
+  );
+  return `${text} ${UNITS[unit] ?? "B"}`;
 }
 
 /**
@@ -39,9 +48,15 @@ export function parseGiB(input: string): number | null {
 
 /** The inverse of parseGiB for pre-filling an input: 107374182400 → "100". */
 export function toGiBInput(bytes: number): string {
-  return trim(bytes / GIB, 2);
+  return String(trim(bytes / GIB, 2));
 }
 
-export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(iso));
+export function formatDate(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(iso));
+}
+
+export function formatDateTime(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(iso),
+  );
 }

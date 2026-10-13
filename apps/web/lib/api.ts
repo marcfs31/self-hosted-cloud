@@ -1,5 +1,5 @@
 import type { ErrorCode } from "@cloud/shared";
-import { messages } from "./messages";
+import { en as englishErrors } from "./i18n/messages/errors/en";
 
 /** Thrown for every non-2xx response, and for network or malformed-response failures. */
 export class ApiError extends Error {
@@ -20,7 +20,7 @@ export interface ApiInit extends Omit<RequestInit, "body"> {
 }
 
 function isErrorCode(value: unknown): value is ErrorCode {
-  return typeof value === "string" && Object.hasOwn(messages.errors, value);
+  return typeof value === "string" && Object.hasOwn(englishErrors, value);
 }
 
 function codeFromBody(body: unknown): ErrorCode {
@@ -79,7 +79,12 @@ export async function apiFetch<T = void>(path: string, init: ApiInit = {}): Prom
   return parsed as T;
 }
 
-/** Copy for any thrown value. Unknown failures read as an internal error. */
-export function errorMessage(error: unknown): string {
-  return messages.errors[error instanceof ApiError ? error.code : "internal"];
+/** The error code for any thrown value. Unknown failures read as an internal error. */
+export function errorCodeOf(error: unknown): ErrorCode {
+  return error instanceof ApiError ? error.code : "internal";
+}
+
+/** Copy for any thrown value, from the current locale's `t.errors`. */
+export function errorMessage(error: unknown, errors: Record<ErrorCode, string>): string {
+  return errors[errorCodeOf(error)];
 }

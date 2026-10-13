@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
-import { errorMessage } from "./api";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import type { ErrorCode } from "@cloud/shared";
+import { errorCodeOf } from "./api";
+import { useT } from "./i18n/provider";
+
+type Field = RefObject<HTMLElement | null> | undefined;
+
+/** A server failure is kept as its code, so it is re-worded if the language changes. */
+type RawError = { code: ErrorCode; field: Field } | { text: string; field: Field };
 
 interface FormError {
   text: string;
-  field: RefObject<HTMLElement | null> | undefined;
+  field: Field;
 }
 
 export interface FormState {
@@ -26,34 +33,40 @@ export interface FormState {
  */
 export function useForm(): FormState {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<FormError | null>(null);
+  const t = useT();
+  const [raw, setRaw] = useState<RawError | null>(null);
   const alertRef = useRef<HTMLDivElement>(null);
   const alertId = useId();
 
+  const error = useMemo<FormError | null>(
+    () => (raw ? { text: "code" in raw ? t.errors[raw.code] : raw.text, field: raw.field } : null),
+    [raw, t],
+  );
+
   useEffect(() => {
-    if (error) {
-      (error.field?.current ?? alertRef.current)?.focus();
+    if (raw) {
+      (raw.field?.current ?? alertRef.current)?.focus();
     }
-  }, [error]);
+  }, [raw]);
 
   const submit = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
-    setError(null);
+    setRaw(null);
     try {
       await action();
     } catch (e) {
-      setError({ text: errorMessage(e), field: undefined });
+      setRaw({ code: errorCodeOf(e), field: undefined });
     } finally {
       setBusy(false);
     }
   }, []);
 
   const fail = useCallback((text: string, field?: RefObject<HTMLElement | null>) => {
-    setError({ text, field });
+    setRaw({ text, field });
   }, []);
 
   const clear = useCallback(() => {
-    setError(null);
+    setRaw(null);
   }, []);
 
   return { busy, error, alertId, alertRef, submit, fail, clear };

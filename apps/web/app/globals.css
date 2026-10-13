@@ -236,6 +236,30 @@ input[readonly] {
   min-inline-size: 0;
 }
 
+.locale-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.locale-switcher label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.locale-switcher select {
+  inline-size: auto;
+}
+
+.auth-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .user-email {
   overflow-wrap: anywhere;
 }

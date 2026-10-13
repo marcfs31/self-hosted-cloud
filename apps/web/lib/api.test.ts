@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch, errorMessage } from "./api";
-import { messages } from "./messages";
+import { MESSAGES } from "./i18n/messages";
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn<typeof fetch>(() =>
@@ -102,11 +102,19 @@ describe("apiFetch", () => {
 
 describe("errorMessage", () => {
   it("returns the copy for the error code", () => {
-    expect(errorMessage(new ApiError("email_taken", 409))).toBe(messages.errors.email_taken);
+    expect(errorMessage(new ApiError("email_taken", 409), MESSAGES.en.errors)).toBe(
+      MESSAGES.en.errors.email_taken,
+    );
   });
 
   it("falls back to the internal copy for unknown failures", () => {
-    expect(errorMessage(new Error("x"))).toBe(messages.errors.internal);
-    expect(errorMessage("x")).toBe(messages.errors.internal);
+    expect(errorMessage(new Error("x"), MESSAGES.en.errors)).toBe(MESSAGES.en.errors.internal);
+    expect(errorMessage("x", MESSAGES.en.errors)).toBe(MESSAGES.en.errors.internal);
+  });
+
+  it("uses the copy of the locale it is given", () => {
+    expect(errorMessage(new ApiError("email_taken", 409), MESSAGES.es.errors)).toBe(
+      MESSAGES.es.errors.email_taken,
+    );
   });
 });

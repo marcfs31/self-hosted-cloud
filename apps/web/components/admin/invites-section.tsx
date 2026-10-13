@@ -4,20 +4,19 @@ import { useCallback, useEffect, useId, useRef, useState, type SubmitEvent } fro
 import type {
   CreateInviteRequest,
   CreatedInviteResponse,
+  ErrorCode,
   Invite,
   ListInvitesResponse,
   Role,
 } from "@cloud/shared";
-import { apiFetch, errorMessage } from "../../lib/api";
-import { formatDate } from "../../lib/format";
-import { messages } from "../../lib/messages";
+import { apiFetch, errorCodeOf } from "../../lib/api";
+import { useFormat, useT } from "../../lib/i18n/provider";
 import { useForm } from "../../lib/use-form";
 import { Field, FormAlert, SubmitButton } from "../form";
 
-const t = messages.admin.invites;
 const ROLES: readonly Role[] = ["member", "admin"];
 
-type InviteStatus = keyof typeof t.status;
+type InviteStatus = "active" | "used" | "expired";
 
 function statusOf(invite: Invite, now: number): InviteStatus {
   if (invite.usedAt !== null) {
@@ -27,6 +26,7 @@ function statusOf(invite: Invite, now: number): InviteStatus {
 }
 
 function CreatedLink({ link, onDismiss }: { link: string; onDismiss: () => void }) {
+  const t = useT().admin.invites;
   const inputRef = useRef<HTMLInputElement>(null);
   const [copy, setCopy] = useState<string>("");
 
@@ -72,12 +72,15 @@ function CreatedLink({ link, onDismiss }: { link: string; onDismiss: () => void 
 }
 
 export function InvitesSection() {
+  const all = useT();
+  const t = all.admin.invites;
+  const format = useFormat();
   const createForm = useForm();
   const revokeForm = useForm();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const formId = useId();
   const [invites, setInvites] = useState<Invite[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<ErrorCode | null>(null);
   const [role, setRole] = useState<Role>("member");
   const [days, setDays] = useState("7");
   const [link, setLink] = useState<string | null>(null);
@@ -98,7 +101,7 @@ export function InvitesSection() {
         }
       } catch (e) {
         if (!cancelled) {
-          setLoadError(errorMessage(e));
+          setLoadError(errorCodeOf(e));
         }
       }
     }
@@ -153,7 +156,7 @@ export function InvitesSection() {
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>
-                {messages.roles[r]}
+                {all.common.roles[r]}
               </option>
             ))}
           </select>
@@ -187,7 +190,7 @@ export function InvitesSection() {
 
       {loadError ? (
         <p role="alert" className="alert">
-          {loadError}
+          {all.errors[loadError]}
         </p>
       ) : invites === null ? (
         <p role="status">{t.loading}</p>
@@ -210,9 +213,9 @@ export function InvitesSection() {
               const status = statusOf(invite, now);
               return (
                 <tr key={invite.id}>
-                  <td data-label={t.colRole}>{messages.roles[invite.role]}</td>
-                  <td data-label={t.colCreated}>{formatDate(invite.createdAt)}</td>
-                  <td data-label={t.colExpires}>{formatDate(invite.expiresAt)}</td>
+                  <td data-label={t.colRole}>{all.common.roles[invite.role]}</td>
+                  <td data-label={t.colCreated}>{format.date(invite.createdAt)}</td>
+                  <td data-label={t.colExpires}>{format.date(invite.expiresAt)}</td>
                   <td data-label={t.colStatus}>
                     <span className={`badge badge-${status}`}>{t.status[status]}</span>
                   </td>
@@ -224,8 +227,8 @@ export function InvitesSection() {
                         disabled={revokeForm.busy}
                         aria-busy={revokingId === invite.id}
                         aria-label={t.revokeFor(
-                          messages.roles[invite.role],
-                          formatDate(invite.createdAt),
+                          all.common.roles[invite.role],
+                          format.date(invite.createdAt),
                         )}
                         onClick={() => {
                           void onRevoke(invite.id);

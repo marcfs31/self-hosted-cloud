@@ -66,7 +66,7 @@ test("setup creates the admin and signs them in", async ({ page }) => {
   await expectNoViolations(page);
 });
 
-test("admin creates an invite and sees the link once", async ({ page }) => {
+test("admin creates an invite and sees the link once", async ({ page, baseURL }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill(ADMIN.email);
   await page.getByLabel("Password").fill(ADMIN.password);
@@ -83,7 +83,7 @@ test("admin creates an invite and sees the link once", async ({ page }) => {
   await expect(link).toBeVisible();
   await expect(page.getByText("This link won't be shown again", { exact: false })).toBeVisible();
   inviteLink = await link.inputValue();
-  expect(inviteLink).toMatch(/^http:\/\/localhost:3100\/register\?token=.+/);
+  expect(inviteLink.startsWith(`${String(baseURL)}/register?token=`)).toBe(true);
 
   const invites = page.getByRole("table", { name: "Invites" });
   await expect(invites.getByRole("row").nth(1)).toContainText("Active");

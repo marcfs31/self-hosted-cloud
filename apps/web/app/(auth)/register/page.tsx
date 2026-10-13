@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { RegisterForm } from "../../../components/register-form";
-import { messages } from "../../../lib/messages";
+import { getT } from "../../../lib/i18n/server";
 
-export const metadata: Metadata = { title: messages.register.title };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT()).auth.registerTitle };
+}
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  const t = await getT();
   return (
     <>
-      <h1>{messages.register.title}</h1>
-      <p>{messages.register.intro}</p>
+      <h1>{t.auth.registerTitle}</h1>
+      <p>{t.auth.registerIntro}</p>
       <Suspense>
         <RegisterForm />
       </Suspense>
