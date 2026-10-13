@@ -207,10 +207,10 @@ export function createPasskeyRouter(opts: {
   router.post("/login/verify", async (req, res) => {
     const { response } = passkeyLoginRequest.parse(req.body);
     const ip = req.ip ?? "unknown";
-    loginLimiter.check(ip);
+    // Counted before the awaits: parallel guesses must not all pass a not-yet-failed check.
+    loginLimiter.begin(ip);
     const expectedChallenge = consume(req, res, "login", null);
     const fail = (knownUserId?: string): never => {
-      loginLimiter.fail(ip);
       if (knownUserId) {
         recordActivity(db, {
           userId: knownUserId,

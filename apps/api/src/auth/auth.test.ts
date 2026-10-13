@@ -165,6 +165,49 @@ describe("login, session and logout", () => {
     expect((await h.post("/api/auth/login", { ...creds, password: PASSWORD })).status).toBe(200);
   });
 
+  it("counts parallel wrong guesses before they finish: at most 5 get a 401, the rest 429", async () => {
+    const h = harness();
+    await setupAdmin(h);
+    const burst = await Promise.all(
+      Array.from({ length: 30 }, () =>
+        h.post("/api/auth/login", { email: "admin@example.com", password: "wrong" }),
+      ),
+    );
+    const statuses = burst.map((res) => res.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(25);
+    const right = await h.post("/api/auth/login", {
+      email: "admin@example.com",
+      password: PASSWORD,
+    });
+    expect(right.status).toBe(429);
+  });
+
+  it("limits guesses per account across addresses: the 26th wrong guess is 429", async () => {
+    const h = harness();
+    await setupAdmin(h);
+    const guess = (n: number, password = "wrong") =>
+      h
+        .post("/api/auth/login", { email: "admin@example.com", password })
+        .set("X-Forwarded-For", `203.0.113.${String(n)}`);
+    for (let n = 0; n < 25; n++) expect((await guess(n)).status).toBe(401);
+    const blocked = await guess(100, PASSWORD);
+    expect([blocked.status, blocked.body]).toEqual([429, { error: { code: "too_many_attempts" } }]);
+    h.clock.t += 15 * 60 * 1000 + 1;
+    expect((await guess(100, PASSWORD)).status).toBe(200);
+  });
+
+  it("successful sign-ins do not use up the per-account allowance", async () => {
+    const h = harness();
+    await setupAdmin(h);
+    for (let n = 0; n < 30; n++) {
+      const res = await h
+        .post("/api/auth/login", { email: "admin@example.com", password: PASSWORD })
+        .set("X-Forwarded-For", `198.51.100.${String(n)}`);
+      expect(res.status).toBe(200);
+    }
+  });
+
   it("rejects /me without a session or with a garbage cookie", async () => {
     const h = harness();
     expect((await h.get("/api/auth/me")).body).toEqual({ error: { code: "unauthenticated" } });
@@ -199,6 +242,24 @@ describe("login, session and logout", () => {
     expect(setCookies(res).join()).toMatch(/Max-Age=2592000/);
     const row = h.db.select().from(sessions).get();
     expect(row?.expiresAt.getTime()).toBe(h.clock.t + 30 * DAY);
+  });
+
+  it("renewal stops at 90 days after sign-in: a session cannot be kept alive forever", async () => {
+    const h = harness();
+    const { cookie } = await setupAdmin(h);
+    for (const day of [20, 40, 60]) {
+      h.clock.t += 20 * DAY;
+      expect((await h.get("/api/auth/me", cookie)).status, `day ${String(day)}`).toBe(200);
+    }
+    const capped = h.db.select().from(sessions).get();
+    expect(capped?.expiresAt.getTime()).toBe((capped?.createdAt.getTime() ?? 0) + 90 * DAY);
+
+    h.clock.t += 20 * DAY; // day 80: inside the last window, nothing left to extend
+    const late = await h.get("/api/auth/me", cookie);
+    expect(late.status).toBe(200);
+    expect(late.get("Set-Cookie")).toBeUndefined();
+    h.clock.t += 11 * DAY; // day 91
+    expect((await h.get("/api/auth/me", cookie)).status).toBe(401);
   });
 
   it("logout deletes the session row, clears the cookie and invalidates the token", async () => {

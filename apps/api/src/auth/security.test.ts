@@ -371,6 +371,22 @@ describe("login with a second factor", () => {
     expect(res.status).toBe(400);
   });
 
+  it("counts parallel disable attempts before the password check finishes: at most 5 get a 401", async () => {
+    const { h, admin } = await enrolled();
+    const burst = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        h.post(
+          "/api/auth/totp/disable",
+          { password: "wrong", code: "000000" },
+          { cookie: admin.cookie },
+        ),
+      ),
+    );
+    const statuses = burst.map((res) => res.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(15);
+  });
+
   it("disabling needs the password and a current code", async () => {
     const { h, admin, secret } = await enrolled();
     const cookie = admin.cookie;
@@ -460,6 +476,86 @@ describe("admin reset of a second factor", () => {
     expect(adminFeed.events.find((e) => e.type === "mfa_reset_by_admin")?.userEmail).toBe(
       "member@example.com",
     );
+  });
+});
+
+describe("session revocation", () => {
+  async function secondSession(h: Harness, email = "admin@example.com") {
+    const res = await h.post("/api/auth/login", { email, password: PASSWORD });
+    expect(res.status).toBe(200);
+    return sidCookie(res);
+  }
+  const status = async (h: Harness, cookie: string) =>
+    (await h.get("/api/auth/me", { cookie })).status;
+
+  it("enabling TOTP ends the other sessions of the user and keeps the caller's", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const stolen = await secondSession(h);
+    expect(await status(h, stolen)).toBe(200);
+    await enableTotp(h, admin.cookie);
+    expect(await status(h, stolen)).toBe(401);
+    expect(await status(h, admin.cookie)).toBe(200);
+  });
+
+  it("disabling TOTP ends the other sessions of the user", async () => {
+    const { h, admin, secret } = await (async () => {
+      const h = harness();
+      const admin = await setupAdmin(h);
+      const factor = await enableTotp(h, admin.cookie);
+      h.clock.t += STEP_MS;
+      return { h, admin, ...factor };
+    })();
+    const login = await h.post("/api/auth/login", {
+      email: "admin@example.com",
+      password: PASSWORD,
+    });
+    const pending = sidCookie(login);
+    const done = await h.post(
+      "/api/auth/login/totp",
+      { code: totpAt(secret, h.clock.t) },
+      { cookie: pending },
+    );
+    const other = sidCookie(done);
+    expect(await status(h, other)).toBe(200);
+    h.clock.t += STEP_MS;
+    const off = await h.post(
+      "/api/auth/totp/disable",
+      { password: PASSWORD, code: totpAt(secret, h.clock.t) },
+      { cookie: admin.cookie },
+    );
+    expect(off.status).toBe(204);
+    expect(await status(h, other)).toBe(401);
+    expect(await status(h, admin.cookie)).toBe(200);
+  });
+
+  it("an admin reset of the second factor ends every session of that user", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const member = await addMember(h, admin.cookie);
+    const second = await secondSession(h, "member@example.com");
+    const reset = await h.post(
+      `/api/admin/users/${member.user.id}/reset-mfa`,
+      {},
+      { cookie: admin.cookie },
+    );
+    expect(reset.status).toBe(204);
+    expect(await status(h, member.cookie)).toBe(401);
+    expect(await status(h, second)).toBe(401);
+    expect(await status(h, admin.cookie)).toBe(200);
+  });
+
+  it("POST /sessions/revoke-others keeps the caller's session and nobody else's survives", async () => {
+    const h = harness();
+    const admin = await setupAdmin(h);
+    const member = await addMember(h, admin.cookie);
+    const other = await secondSession(h);
+    const out = await h.post("/api/auth/sessions/revoke-others", {}, { cookie: admin.cookie });
+    expect(out.status).toBe(204);
+    expect(await status(h, other)).toBe(401);
+    expect(await status(h, admin.cookie)).toBe(200);
+    expect(await status(h, member.cookie)).toBe(200);
+    expect((await h.post("/api/auth/sessions/revoke-others", {})).status).toBe(401);
   });
 });
 

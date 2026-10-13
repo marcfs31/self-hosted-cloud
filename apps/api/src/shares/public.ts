@@ -102,9 +102,9 @@ export function createPublicShares(opts: {
       return;
     }
     const key = `${req.ip ?? "unknown"}|${share.id}`;
-    unlockLimiter.check(key);
+    // Counted before the Argon2 await: parallel guesses must not all pass a not-yet-failed check.
+    unlockLimiter.begin(key);
     if (!(await verifyPassword(share.passwordHash, password))) {
-      unlockLimiter.fail(key);
       throw new HttpError(401, "invalid_credentials");
     }
     unlockLimiter.clear(key);

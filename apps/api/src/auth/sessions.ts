@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull, lt, ne, or } from "drizzle-orm";
 import type { RequestHandler, Response } from "express";
 import { parseCookie, stringifySetCookie } from "cookie";
 import type { Role, User } from "@cloud/shared";
@@ -12,6 +12,8 @@ import { hashToken, newToken } from "./tokens.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const SESSION_TTL_MS = 30 * DAY_MS;
 export const SESSION_RENEW_BELOW_MS = 15 * DAY_MS;
+/** Renewal never carries a session past this age: a stolen cookie cannot live forever. */
+export const SESSION_MAX_AGE_MS = 90 * DAY_MS;
 /** A session that only passed the password step is good for this long, never renewed. */
 export const PENDING_SESSION_TTL_MS = 10 * 60 * 1000;
 /** lastUsedAt of an app password is written at most this often. */
@@ -45,6 +47,32 @@ export function sessionOf(res: Response): Extract<AuthContext, { via: "session" 
   const ctx = authOf(res);
   if (ctx.via !== "session") throw new HttpError(404, "not_found");
   return ctx;
+}
+
+/**
+ * Ends every session of a user except `keepTokenHash` (the caller's own, if any). For the
+ * moments a stolen cookie must stop working: second factor enabled, disabled or reset, and
+ * "sign out everywhere else".
+ */
+export function revokeOtherSessions(
+  db: Pick<Db, "delete">,
+  userId: string,
+  keepTokenHash?: string,
+): void {
+  db.delete(sessions)
+    .where(
+      and(
+        eq(sessions.userId, userId),
+        keepTokenHash === undefined ? undefined : ne(sessions.tokenHash, keepTokenHash),
+      ),
+    )
+    .run();
+}
+
+/** The token hash of the cookie session behind a request, or undefined for an app password. */
+export function ownTokenHash(res: Response): string | undefined {
+  const ctx = authOf(res);
+  return ctx.via === "session" ? ctx.tokenHash : undefined;
 }
 
 export interface SessionService {
@@ -156,7 +184,12 @@ export function createSessionService(opts: {
       }
       const tokenHash = hashToken(raw);
       const row = db
-        .select({ expiresAt: sessions.expiresAt, mfaPending: sessions.mfaPending, user: users })
+        .select({
+          expiresAt: sessions.expiresAt,
+          createdAt: sessions.createdAt,
+          mfaPending: sessions.mfaPending,
+          user: users,
+        })
         .from(sessions)
         .innerJoin(users, eq(sessions.userId, users.id))
         .where(eq(sessions.tokenHash, tokenHash))
@@ -178,11 +211,17 @@ export function createSessionService(opts: {
         return;
       }
       if (!row.mfaPending && remaining < SESSION_RENEW_BELOW_MS) {
-        db.update(sessions)
-          .set({ expiresAt: new Date(current + SESSION_TTL_MS) })
-          .where(eq(sessions.tokenHash, tokenHash))
-          .run();
-        service.setCookie(res, raw);
+        const renewedTo = Math.min(
+          current + SESSION_TTL_MS,
+          row.createdAt.getTime() + SESSION_MAX_AGE_MS,
+        );
+        if (renewedTo > row.expiresAt.getTime()) {
+          db.update(sessions)
+            .set({ expiresAt: new Date(renewedTo) })
+            .where(eq(sessions.tokenHash, tokenHash))
+            .run();
+          service.setCookie(res, raw, renewedTo - current);
+        }
       }
       contexts.set(res, {
         via: "session",

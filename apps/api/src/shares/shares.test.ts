@@ -432,6 +432,18 @@ describe("password protection", () => {
     expect((await v.unlock(PASSWORD)).status).toBe(204);
   });
 
+  it("counts parallel unlock guesses before they finish: at most 5 get a 401", async () => {
+    const h = harness();
+    const { link } = await protectedFile(h);
+    const v = visitor(h, link);
+    const burst = await Promise.all(
+      Array.from({ length: 20 }, (_, n) => v.unlock(`wrong-${String(n)}`)),
+    );
+    const statuses = burst.map((res) => res.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(15);
+  });
+
   it("a success resets the failure count", async () => {
     const h = harness();
     const { link } = await protectedFile(h);

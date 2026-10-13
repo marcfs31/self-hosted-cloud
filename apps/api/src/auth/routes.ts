@@ -14,10 +14,12 @@ import type { Db } from "../db/client.js";
 import { invites, sessions, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
-import { createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
+import { ACCOUNT_LOGIN_LIMIT, createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
 import {
   authOf,
+  ownTokenHash,
   PENDING_SESSION_TTL_MS,
+  revokeOtherSessions,
   sessionOf,
   toUser,
   type SessionService,
@@ -33,6 +35,7 @@ export function createAuthRouter(opts: {
   const { db, sessions: sessionService, now } = opts;
   const limiterOptions = { ...FAILURE_LIMIT, now };
   const loginLimiter = createRateLimiter(limiterOptions);
+  const accountLimiter = createRateLimiter({ ...ACCOUNT_LOGIN_LIMIT, now });
   const registerLimiter = createRateLimiter(limiterOptions);
   const setupLimiter = createRateLimiter(limiterOptions);
   const router = Router();
@@ -82,11 +85,15 @@ export function createAuthRouter(opts: {
     const { email, password } = loginRequest.parse(req.body);
     const ip = req.ip;
     const key = `${ip ?? "unknown"}|${email}`;
+    const accountKey = `user:${email}`;
+    // Counted before the Argon2 await: parallel guesses must not all pass a not-yet-failed check.
     loginLimiter.check(key);
+    accountLimiter.check(accountKey);
+    loginLimiter.begin(key);
+    accountLimiter.begin(accountKey);
     const row = db.select().from(users).where(eq(users.email, email)).get();
     const ok = await verifyPassword(row?.passwordHash, password);
     if (!row || !ok) {
-      loginLimiter.fail(key);
       // Only a known email is attributed; unknown ones would let anyone fill the log.
       if (row) {
         recordActivity(db, {
@@ -100,6 +107,7 @@ export function createAuthRouter(opts: {
       throw new HttpError(401, "invalid_credentials");
     }
     loginLimiter.clear(key);
+    accountLimiter.release(accountKey);
     const mfaRequired = totpEnabled(db, row.id);
     const token = db.transaction((tx) => {
       tx.delete(sessions)
@@ -189,6 +197,13 @@ export function createAuthRouter(opts: {
       }
     });
     sessionService.clearCookie(res);
+    res.status(204).end();
+  });
+
+  // "Sign out everywhere else": the caller's own session stays, every other one ends.
+  router.post("/sessions/revoke-others", sessionService.requireUser, (req, res) => {
+    const { user } = authOf(res);
+    revokeOtherSessions(db, user.id, ownTokenHash(res));
     res.status(204).end();
   });
 

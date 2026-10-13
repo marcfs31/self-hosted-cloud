@@ -12,7 +12,7 @@ import {
 } from "@cloud/shared";
 import { listActivity } from "../activity/routes.js";
 import { recordActivity } from "../activity/record.js";
-import { toUser, authOf, type SessionService } from "../auth/sessions.js";
+import { toUser, authOf, revokeOtherSessions, type SessionService } from "../auth/sessions.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import type { Db } from "../db/client.js";
 import { fileVersions, invites, recoveryCodes, totp, users } from "../db/schema/index.js";
@@ -91,6 +91,8 @@ export function createAdminRouter(opts: {
       }
       tx.delete(totp).where(eq(totp.userId, targetId)).run();
       tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, targetId)).run();
+      // A lost phone may be a stolen one, and the user's sessions never needed a code.
+      revokeOtherSessions(tx, targetId);
       recordActivity(tx, {
         userId: targetId,
         type: "mfa_reset_by_admin",

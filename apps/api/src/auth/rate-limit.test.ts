@@ -24,4 +24,25 @@ describe("rate limiter", () => {
     limiter.clear("k");
     limiter.check("k");
   });
+
+  it("begin counts the attempt at once, so a burst cannot pass a not-yet-failed check", () => {
+    const limiter = createRateLimiter({ max: 3, windowMs: 1000, now: () => 5 });
+    for (let i = 0; i < 3; i++) limiter.begin("k");
+    expect(() => {
+      limiter.begin("k");
+    }).toThrow(HttpError);
+    limiter.clear("k");
+    limiter.begin("k");
+  });
+
+  it("release takes back one begin and keeps the others", () => {
+    const limiter = createRateLimiter({ max: 2, windowMs: 1000, now: () => 5 });
+    limiter.begin("k");
+    limiter.begin("k");
+    limiter.release("k");
+    limiter.begin("k");
+    expect(() => {
+      limiter.check("k");
+    }).toThrow(HttpError);
+  });
 });

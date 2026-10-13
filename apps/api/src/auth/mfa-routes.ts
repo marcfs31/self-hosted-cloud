@@ -21,7 +21,13 @@ import {
   replaceRecoveryCodes,
   totpEnabled,
 } from "./second-factor.js";
-import { authOf, sessionOf, type SessionService } from "./sessions.js";
+import {
+  authOf,
+  ownTokenHash,
+  revokeOtherSessions,
+  sessionOf,
+  type SessionService,
+} from "./sessions.js";
 import { generateSecret, otpauthUrl, verifyTotp } from "./totp.js";
 
 export function createMfaRouter(opts: {
@@ -138,6 +144,8 @@ export function createMfaRouter(opts: {
       if (updated.length !== 1) throw new HttpError(409, "invalid_request");
       const fresh = replaceRecoveryCodes(tx, id);
       recordActivity(tx, { userId: id, type: "totp_enabled", ip: req.ip, at: now() });
+      // Whoever holds a stolen cookie never passed the second factor: end their sessions.
+      revokeOtherSessions(tx, id, ownTokenHash(res));
       return fresh;
     });
     keys.forEach((key) => {
@@ -151,19 +159,20 @@ export function createMfaRouter(opts: {
     const { password, code } = totpDisableRequest.parse(req.body);
     const { id } = authOf(res).user;
     const keys = keysFor(id, req.ip);
+    if (!totpEnabled(db, id)) throw new HttpError(409, "invalid_request");
+    // Counted before the Argon2 await: parallel guesses must not all pass a not-yet-failed check.
     keys.forEach((key) => {
       limiter.check(key);
     });
-    if (!totpEnabled(db, id)) throw new HttpError(409, "invalid_request");
+    keys.forEach((key) => {
+      limiter.begin(key);
+    });
     const owner = db
       .select({ passwordHash: users.passwordHash })
       .from(users)
       .where(eq(users.id, id))
       .get();
     if (!(await verifyPassword(owner?.passwordHash, password))) {
-      keys.forEach((key) => {
-        limiter.fail(key);
-      });
       throw new HttpError(401, "invalid_credentials");
     }
     const disabled = db.transaction((tx) => {
@@ -171,14 +180,10 @@ export function createMfaRouter(opts: {
       tx.delete(totp).where(eq(totp.userId, id)).run();
       tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, id)).run();
       recordActivity(tx, { userId: id, type: "totp_disabled", ip: req.ip, at: now() });
+      revokeOtherSessions(tx, id, ownTokenHash(res));
       return true;
     });
-    if (!disabled) {
-      keys.forEach((key) => {
-        limiter.fail(key);
-      });
-      throw new HttpError(400, "invalid_code");
-    }
+    if (!disabled) throw new HttpError(400, "invalid_code");
     keys.forEach((key) => {
       limiter.clear(key);
     });
