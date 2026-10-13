@@ -6,9 +6,8 @@ import {
   lockTokenHeader,
   parsePropertyUpdate,
   parsePropfind,
-  submittedTokens,
 } from "./requests.js";
-import { escapeAttribute, escapeText, parseXml, XmlError } from "./xml.js";
+import { escapeAttribute, escapeText, parseXml, standaloneXml, XmlError } from "./xml.js";
 
 describe("parseXml", () => {
   it("resolves prefixes and default namespaces", () => {
@@ -48,14 +47,68 @@ describe("parseXml", () => {
     ["an unterminated comment", "<a><!-- </a>"],
     ["an empty document", ""],
     ["a non-ASCII element name", "<é/>"],
+    ["a prefix bound to the empty namespace", '<r xmlns:bar=""/>'],
+    ["the xmlns prefix declared", '<r xmlns:xmlns="urn:x"/>'],
+    ["the xml prefix bound elsewhere", '<r xmlns:xml="urn:x"/>'],
+    [
+      "another prefix bound to the xml namespace",
+      '<r xmlns:p="http://www.w3.org/XML/1998/namespace"/>',
+    ],
+    ["a duplicate attribute", '<r a="1" a="2"/>'],
+    ["a duplicate namespace declaration", '<r xmlns:p="u" xmlns:p="u"/>'],
+    ["a duplicate attribute through two prefixes", '<r xmlns:p="u" xmlns:q="u" p:a="1" q:a="2"/>'],
+    ["an attribute with an undeclared prefix", '<r p:a="1"/>'],
+    ["a control character", "<r>a\u0001b</r>"],
   ])("rejects %s", (_name, input) => {
     expect(() => parseXml(input)).toThrow(XmlError);
+  });
+
+  it("allows what Namespaces in XML does", () => {
+    expect(parseXml('<r xmlns="urn:a"><c xmlns=""/></r>').children[0]?.ns).toBe("");
+    expect(() =>
+      parseXml('<r xml:lang="en" xmlns:xml="http://www.w3.org/XML/1998/namespace"/>'),
+    ).not.toThrow();
+    expect(() => parseXml('<r xmlns:p="u" xmlns:q="v" p:a="1" q:a="2"/>')).not.toThrow();
   });
 
   it("caps nesting depth and element count", () => {
     expect(() => parseXml("<a>".repeat(40) + "</a>".repeat(40))).toThrow(XmlError);
     expect(() => parseXml(`<a>${"<b/>".repeat(2500)}</a>`)).toThrow(XmlError);
     expect(() => parseXml(`<a>${"<b/>".repeat(1500)}</a>`)).not.toThrow();
+  });
+});
+
+describe("standaloneXml", () => {
+  const dav = 'xmlns:D="DAV:"';
+
+  it("declares the namespaces an element inherited, keeping its source as written", () => {
+    const root = parseXml(
+      `<D:r ${dav} xmlns:Z="urn:z" xmlns="urn:d"><Z:p xml:lang="en">a &amp; <i k="v"/></Z:p></D:r>`,
+    );
+    const prop = root.children[0];
+    expect(prop && standaloneXml(prop)).toBe(
+      '<Z:p xmlns:D="DAV:" xmlns:Z="urn:z" xmlns="urn:d" xml:lang="en">a &amp; <i k="v"/></Z:p>',
+    );
+  });
+
+  it("does not redeclare what the element declares itself or what is not bound", () => {
+    const root = parseXml(
+      '<r xmlns:a="urn:a" xmlns="urn:d"><a:p xmlns:a="urn:other" xmlns=""/></r>',
+    );
+    const prop = root.children[0];
+    expect(prop && standaloneXml(prop)).toBe('<a:p xmlns:a="urn:other" xmlns=""/>');
+    const bare = parseXml("<r><p/></r>").children[0];
+    expect(bare && standaloneXml(bare)).toBe("<p/>");
+  });
+
+  it("round-trips: parsing the result gives the same names and text", () => {
+    const root = parseXml(
+      '<r xmlns:q="urn:q" xmlns="urn:d"><q:p a="&lt;">x<c/><![CDATA[<y>]]></q:p></r>',
+    );
+    const prop = root.children[0];
+    const again = parseXml(standaloneXml(prop ?? root));
+    expect([again.ns, again.name, again.text]).toEqual(["urn:q", "p", "x<y>"]);
+    expect([again.children[0]?.ns, again.children[0]?.name]).toEqual(["urn:d", "c"]);
   });
 });
 
@@ -92,12 +145,19 @@ describe("request bodies", () => {
     expect(() => parsePropfind("<propfind/>")).toThrow();
   });
 
-  it("collects the properties of a propertyupdate", () => {
-    const props = parsePropertyUpdate(
-      '<D:propertyupdate xmlns:D="DAV:"><D:set><D:prop><D:a/><D:b/></D:prop></D:set><D:remove><D:prop><D:c/></D:prop></D:remove></D:propertyupdate>',
+  it("collects the changes of a propertyupdate in document order", () => {
+    const changes = parsePropertyUpdate(
+      '<D:propertyupdate xmlns:D="DAV:" xmlns:Z="urn:z"><D:set><D:prop><Z:a>1</Z:a><Z:b/></D:prop></D:set><D:remove><D:prop><Z:c/></D:prop></D:remove><D:set><D:prop><Z:d/></D:prop></D:set></D:propertyupdate>',
     );
-    expect(props.map((p) => p.name)).toEqual(["a", "b", "c"]);
+    expect(changes.map((c) => [c.op, c.ns, c.name])).toEqual([
+      ["set", "urn:z", "a"],
+      ["set", "urn:z", "b"],
+      ["remove", "urn:z", "c"],
+      ["set", "urn:z", "d"],
+    ]);
+    expect(changes[0]).toMatchObject({ xml: '<Z:a xmlns:D="DAV:" xmlns:Z="urn:z">1</Z:a>' });
     expect(() => parsePropertyUpdate("")).toThrow();
+    expect(() => parsePropertyUpdate("<propfind xmlns='DAV:'/>")).toThrow();
   });
 });
 
@@ -115,11 +175,6 @@ describe("header parsing", () => {
       "opaquelocktoken:abc",
     );
     expect(lockTokenHeader(h({ "lock-token": "opaquelocktoken:abc" }))).toBeUndefined();
-    expect([...submittedTokens(h({ if: '</dav/a> (<t1> ["e"]) (Not <t2> <t3>)' }))]).toEqual([
-      "t1",
-      "t3",
-    ]);
-    expect(submittedTokens(h({})).size).toBe(0);
   });
 });
 

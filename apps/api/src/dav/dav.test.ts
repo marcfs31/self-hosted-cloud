@@ -292,6 +292,13 @@ describe("WebDAV: PROPFIND", () => {
     expect((await da.propfind("/dav/", "0", bomb)).status).toBe(400);
     expect((await da.propfind("/dav/", "0", "<D:propfind")).status).toBe(400);
     expect((await da.propfind("/dav/", "0", '<a xmlns="x"/>')).status).toBe(400);
+    // A prefix cannot be bound to the empty namespace (Namespaces in XML 1.0).
+    const undeclared =
+      '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><bar:foo xmlns:bar=""/></D:prop></D:propfind>';
+    expect((await da.propfind("/dav/", "0", undeclared)).status).toBe(400);
+    const nullDefault =
+      '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><foo xmlns=""/></D:prop></D:propfind>';
+    expect((await da.propfind("/dav/", "0", nullDefault)).status).toBe(207);
     const big = `<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:allprop/><!--${"x".repeat(70_000)}--></D:propfind>`;
     expect((await da.propfind("/dav/", "0", big)).status).toBe(413);
     // Still healthy afterwards.
@@ -312,30 +319,6 @@ describe("WebDAV: PROPFIND", () => {
     expect(text).toContain("a&amp;b&lt;c&gt;.txt");
     expect(text).toContain("/dav/a%26b%3Cc%3E.txt");
     expect(() => parseMultistatus(text)).not.toThrow();
-  });
-});
-
-describe("WebDAV: PROPPATCH", () => {
-  it("answers 207 with 403 for each property instead of failing", async () => {
-    const { da } = await setup();
-    await da.put("/dav/a.txt", "x");
-    const body =
-      '<?xml version="1.0"?><D:propertyupdate xmlns:D="DAV:" xmlns:Z="urn:schemas-microsoft-com:"><D:set><D:prop><Z:Win32LastModifiedTime>x</Z:Win32LastModifiedTime><D:getlastmodified>y</D:getlastmodified></D:prop></D:set><D:remove><D:prop><Z:Foo/></D:prop></D:remove></D:propertyupdate>';
-    const res = await da.proppatch("/dav/a.txt", body);
-    expect(res.status).toBe(207);
-    const [entry] = parseMultistatus(
-      await bodyText(
-        da.req("PROPPATCH", "/dav/a.txt").set("Content-Type", "application/xml").send(body),
-      ),
-    );
-    expect(entry?.href).toBe("/dav/a.txt");
-    expect([...(entry?.props.get(403)?.keys() ?? [])]).toEqual([
-      "Win32LastModifiedTime",
-      "getlastmodified",
-      "Foo",
-    ]);
-    expect((await da.proppatch("/dav/missing", body)).status).toBe(404);
-    expect((await da.proppatch("/dav/a.txt", "<garbage")).status).toBe(400);
   });
 });
 

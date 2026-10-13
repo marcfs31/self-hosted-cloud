@@ -47,6 +47,8 @@ export interface LockManager {
     ownerXml: string | undefined;
     timeoutSeconds: number;
   }): Lock;
+  /** Whether the token names a live lock of the user that applies to the path, its parent or what lies below it. */
+  holds(userId: string, path: readonly string[], token: string): boolean;
   /** The lock with this token if it belongs to the user and protects the path. */
   find(userId: string, path: readonly string[], token: string): Lock | undefined;
   refresh(lock: Lock, timeoutSeconds: number): Lock;
@@ -117,6 +119,17 @@ export function createLockManager(now: () => number): LockManager {
       };
       locks.set(lock.token, lock);
       return lock;
+    },
+
+    holds(userId, path, token) {
+      const parent = path.slice(0, -1);
+      return live(userId).some(
+        (lock) =>
+          lock.token === token &&
+          (covers(lock, path) ||
+            (path.length > 0 && isSamePath(lock.path, parent)) ||
+            isBelow(lock.path, path)),
+      );
     },
 
     find(userId, path, token) {

@@ -1,10 +1,12 @@
 import { XML_DECLARATION } from "./errors.js";
 import { activeLockXml, type Lock } from "./locks.js";
 import { hrefFor } from "./paths.js";
+import type { DeadProperty } from "./properties.js";
 import { DAV_NS, type PropfindRequest, type PropName } from "./requests.js";
 import { escapeAttribute, escapeText } from "./xml.js";
 
 export interface DavResource {
+  id: string;
   /** Names from the root; empty for the root itself. */
   segments: string[];
   collection: boolean;
@@ -19,6 +21,8 @@ export interface DavResource {
 export interface PropContext {
   quotaBytes: number;
   usedBytes: number;
+  /** Dead properties by file ID; a resource missing from it has none. */
+  deadOf: ReadonlyMap<string, readonly DeadProperty[]>;
   locksOf: (segments: readonly string[]) => Lock[];
 }
 
@@ -41,6 +45,13 @@ const LIVE: Record<string, (r: DavResource, c: PropContext) => string | undefine
   "quota-available-bytes": (r, c) =>
     r.collection ? String(Math.max(0, c.quotaBytes - c.usedBytes)) : undefined,
   "quota-used-bytes": (r, c) => (r.collection ? String(c.usedBytes) : undefined),
+};
+
+const STATUS_TEXT: Record<number, string> = {
+  200: "OK",
+  403: "Forbidden",
+  424: "Failed Dependency",
+  507: "Insufficient Storage",
 };
 
 const LIVE_NAMES = Object.keys(LIVE);
@@ -71,12 +82,15 @@ export function propfindEntry(
   context: PropContext,
 ): string {
   const live = (name: string) => LIVE[name]?.(resource, context);
+  const dead = context.deadOf.get(resource.id) ?? [];
   if (request.kind === "prop") {
     const found: string[] = [];
     const missing: string[] = [];
     for (const prop of request.props) {
+      const stored = dead.find((d) => d.ns === prop.ns && d.name === prop.name);
       const value = prop.ns === DAV_NS ? live(prop.name) : undefined;
-      if (value === undefined) missing.push(element(prop, ""));
+      if (stored) found.push(stored.xml);
+      else if (value === undefined) missing.push(element(prop, ""));
       else found.push(element(prop, value));
     }
     const parts: string[] = [];
@@ -85,18 +99,39 @@ export function propfindEntry(
     return response(resource, parts.join(""));
   }
   const names = LIVE_NAMES.filter((name) => live(name) !== undefined);
-  const props = names
-    .map((name) =>
-      element({ ns: DAV_NS, name }, request.kind === "allprop" ? (live(name) ?? "") : ""),
-    )
-    .join("");
+  const allprop = request.kind === "allprop";
+  const props =
+    names.map((name) => element({ ns: DAV_NS, name }, allprop ? (live(name) ?? "") : "")).join("") +
+    dead.map((d) => (allprop ? d.xml : element(d, ""))).join("");
   return response(resource, propstat(props, "200 OK"));
 }
 
-/** PROPPATCH: every live property is read-only and there is no dead-property storage. */
-export function proppatchEntry(resource: DavResource, props: readonly PropName[]): string {
+/**
+ * One <D:response> answering a PROPPATCH: every property named once, with the status its change
+ * got. The properties of one status share a <D:propstat>.
+ */
+export function proppatchEntry(
+  resource: DavResource,
+  props: readonly PropName[],
+  statuses: readonly number[],
+): string {
   if (props.length === 0) return response(resource, "<D:status>HTTP/1.1 200 OK</D:status>");
-  const rejected = props.map((p) => element(p, "")).join("");
-  const error = "<D:error><D:cannot-modify-protected-property/></D:error>";
-  return response(resource, propstat(rejected, "403 Forbidden", error));
+  const order: number[] = [];
+  const grouped = new Map<number, string>();
+  props.forEach((prop, i) => {
+    const status = statuses[i] ?? 500;
+    if (!grouped.has(status)) order.push(status);
+    grouped.set(status, (grouped.get(status) ?? "") + element(prop, ""));
+  });
+  return response(
+    resource,
+    order
+      .map((status) => {
+        const text = STATUS_TEXT[status] ?? "Internal Server Error";
+        const error =
+          status === 403 ? "<D:error><D:cannot-modify-protected-property/></D:error>" : "";
+        return propstat(grouped.get(status) ?? "", `${status} ${text}`, error);
+      })
+      .join(""),
+  );
 }

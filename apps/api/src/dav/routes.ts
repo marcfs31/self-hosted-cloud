@@ -8,12 +8,15 @@ import { createFolder, relocateItem, trashItem } from "../files/mutations.js";
 import { sweepDavTemp } from "../files/storage.js";
 import { getNode, getOrCreateRoot, listChildren, usedBytes, type FileRow } from "../files/tree.js";
 import { createDavAuth } from "./auth.js";
+import { evaluateIf } from "./conditions.js";
 import { copyTree } from "./copy.js";
 import { davErrorHandler, DavError, XML_DECLARATION } from "./errors.js";
 import { activeLockXml, createLockManager } from "./locks.js";
 import { destinationSegments, isBelow, isSamePath, mountedPath, parseSegments } from "./paths.js";
+import { applyPropertyChanges, deadPropertiesOf } from "./properties.js";
 import { multistatus, propfindEntry, proppatchEntry, type PropContext } from "./props.js";
 import {
+  DAV_NS,
   depthOf,
   hasBody,
   lockTimeoutSeconds,
@@ -23,7 +26,6 @@ import {
   parsePropertyUpdate,
   parsePropfind,
   readBody,
-  submittedTokens,
 } from "./requests.js";
 import { childOf, resolve, resolveParent, toResource } from "./resolve.js";
 import { storeFile } from "./transfer.js";
@@ -118,6 +120,37 @@ export function createDavRouter(opts: {
   const ownHost = new URL(config.publicOrigin).host.toLowerCase();
   const router = Router();
 
+  const hostsOf = (req: Request): string[] =>
+    [ownHost, req.get("host")?.toLowerCase()].filter((h) => h !== undefined);
+
+  /**
+   * The lock tokens the request's If header submits. The header is evaluated against the
+   * request's resource (and the other paths a COPY or MOVE names), so a condition that holds
+   * nowhere is 412 even when nothing is locked.
+   */
+  function submittedBy(
+    req: Request,
+    user: User,
+    path: readonly string[],
+    also: readonly (readonly string[])[] = [],
+  ): ReadonlySet<string> {
+    return evaluateIf(req.get("if"), (tag) => {
+      let target: readonly string[] | null = path;
+      if (tag !== undefined) {
+        const tagged = destinationSegments(tag, hostsOf(req));
+        target = tagged.local ? tagged.segments : null;
+      }
+      if (!target) return { holds: () => false, etag: undefined };
+      const scope = tag === undefined ? [target, ...also] : [target];
+      const row = resolve(db, user.id, getOrCreateRoot(db, user.id, now()), target);
+      return {
+        holds: (token) => scope.some((p) => locks.holds(user.id, p, token)),
+        etag:
+          row?.kind === "file" && row.currentVersionId ? `"${row.currentVersionId}"` : undefined,
+      };
+    });
+  }
+
   const handlers: Record<(typeof METHODS)[number], (call: Call) => void | Promise<void>> = {
     OPTIONS({ res }) {
       empty(res, 200, { Allow: ALLOW });
@@ -138,22 +171,33 @@ export function createDavRouter(opts: {
           resources.push(toResource(child, [...segments, child.name]));
         }
       }
+      const liveOnly = request.kind === "prop" && request.props.every((p) => p.ns === DAV_NS);
       const context: PropContext = {
         quotaBytes: user.quotaBytes,
         usedBytes: usedBytes(db, user.id),
+        deadOf: liveOnly
+          ? new Map()
+          : deadPropertiesOf(
+              db,
+              resources.map((r) => r.id),
+            ),
         locksOf: (at) => locks.discover(user.id, at),
       };
       xml(res, 207, multistatus(resources.map((r) => propfindEntry(r, request, context))));
     },
 
     async PROPPATCH({ req, res, user, path }) {
-      const props = parsePropertyUpdate(await readBody(req));
+      const changes = parsePropertyUpdate(await readBody(req));
       const segments = existingPath({ path });
-      const row = resolve(db, user.id, getOrCreateRoot(db, user.id, now()), segments);
-      if (!row) throw new DavError(404);
-      locks.assertWritable(user.id, segments, submittedTokens(req));
-      const resource = toResource(getNode(db, row.id), segments);
-      xml(res, 207, multistatus([proppatchEntry(resource, props)]));
+      const submitted = submittedBy(req, user, segments);
+      const entry = db.transaction((tx) => {
+        const row = resolve(tx, user.id, getOrCreateRoot(tx, user.id, now()), segments);
+        if (!row) throw new DavError(404);
+        locks.assertWritable(user.id, segments, submitted);
+        const statuses = applyPropertyChanges(tx, row.id, changes);
+        return proppatchEntry(toResource(getNode(tx, row.id), segments), changes, statuses);
+      });
+      xml(res, 207, multistatus([entry]));
     },
 
     GET(call) {
@@ -172,7 +216,7 @@ export function createDavRouter(opts: {
       if (declaredLength !== undefined && !Number.isSafeInteger(declaredLength)) {
         throw new DavError(400);
       }
-      const submitted = submittedTokens(req);
+      const submitted = submittedBy(req, user, segments);
       const { created, versionId } = await storeFile(
         { db, config, now, user, ip, ledger },
         segments,
@@ -193,7 +237,9 @@ export function createDavRouter(opts: {
       const segments = newPath(call);
       const name = segments.at(-1);
       if (name === undefined) throw new DavError(405);
-      locks.assertWritable(user.id, segments, submittedTokens(req), { membership: true });
+      locks.assertWritable(user.id, segments, submittedBy(req, user, segments), {
+        membership: true,
+      });
       db.transaction((tx) => {
         const parent = resolveParent(tx, user.id, getOrCreateRoot(tx, user.id, now()), segments);
         if (!parent) throw new DavError(409);
@@ -209,7 +255,7 @@ export function createDavRouter(opts: {
       if (depth !== undefined && depth !== "infinity") throw new DavError(400);
       const segments = existingPath(call);
       if (segments.length === 0) throw new DavError(403);
-      locks.assertWritable(user.id, segments, submittedTokens(req), {
+      locks.assertWritable(user.id, segments, submittedBy(req, user, segments), {
         membership: true,
         subtree: true,
       });
@@ -225,7 +271,7 @@ export function createDavRouter(opts: {
     MOVE(call) {
       const { req, res, user, ip } = call;
       const { src, dst, overwrite } = transferTargets(call);
-      const submitted = submittedTokens(req);
+      const submitted = submittedBy(req, user, src, [dst]);
       locks.assertWritable(user.id, src, submitted, { membership: true, subtree: true });
       locks.assertWritable(user.id, dst, submitted, { membership: true, subtree: true });
       const name = dst.at(-1);
@@ -252,7 +298,10 @@ export function createDavRouter(opts: {
       const { src, dst, overwrite } = transferTargets(call);
       const depth = depthOf(req);
       if (depth === null || depth === "1") throw new DavError(400);
-      locks.assertWritable(user.id, dst, submittedTokens(req), { membership: true, subtree: true });
+      locks.assertWritable(user.id, dst, submittedBy(req, user, src, [dst]), {
+        membership: true,
+        subtree: true,
+      });
       const replaced = await copyTree({
         db,
         config,
@@ -273,7 +322,7 @@ export function createDavRouter(opts: {
       const { req, res, user, ip } = call;
       const info = parseLockInfo(await readBody(req));
       const segments = newPath(call);
-      const submitted = submittedTokens(req);
+      const submitted = submittedBy(req, user, segments);
       const timeout = lockTimeoutSeconds(req);
 
       if (!info) {
@@ -358,8 +407,7 @@ export function createDavRouter(opts: {
     const src = existingPath(call);
     const header = req.get("destination");
     if (header === undefined) throw new DavError(400);
-    const hosts = [ownHost, req.get("host")?.toLowerCase()].filter((h) => h !== undefined);
-    const target = destinationSegments(header, hosts);
+    const target = destinationSegments(header, hostsOf(req));
     if (!target.local) throw new DavError(502);
     if (!target.segments) throw new DavError(400);
     const dst = target.segments;

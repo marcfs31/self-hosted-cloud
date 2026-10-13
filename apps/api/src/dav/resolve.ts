@@ -57,6 +57,7 @@ export function resolveParent(
 
 export function toResource(node: FileNode, segments: string[]): DavResource {
   return {
+    id: node.id,
     segments,
     collection: node.kind === "folder",
     size: node.size,

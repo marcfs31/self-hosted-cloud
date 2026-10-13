@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import { DavError } from "./errors.js";
-import { escapeText, parseXml, XmlError, type XmlElement } from "./xml.js";
+import { escapeText, parseXml, standaloneXml, XmlError, type XmlElement } from "./xml.js";
 
 export const DAV_NS = "DAV:";
 export const MAX_XML_BODY = 64 * 1024;
@@ -95,16 +95,25 @@ export function parsePropfind(body: string): PropfindRequest {
   return { kind: "prop", props };
 }
 
-/** The properties a PROPPATCH tries to set or remove. */
-export function parsePropertyUpdate(body: string): PropName[] {
+export type PropertyChange =
+  { op: "set"; ns: string; name: string; xml: string } | { op: "remove"; ns: string; name: string };
+
+/** The changes a PROPPATCH asks for, set and remove alike, in document order. */
+export function parsePropertyUpdate(body: string): PropertyChange[] {
   const root = parseBody(body);
   if (root?.ns !== DAV_NS || root.name !== "propertyupdate") throw new DavError(400);
-  const props: PropName[] = [];
+  const changes: PropertyChange[] = [];
   for (const action of root.children) {
     if (action.ns !== DAV_NS || (action.name !== "set" && action.name !== "remove")) continue;
-    props.push(...propNames(davChild(action, "prop")));
+    for (const prop of davChild(action, "prop")?.children ?? []) {
+      changes.push(
+        action.name === "set"
+          ? { op: "set", ns: prop.ns, name: prop.name, xml: standaloneXml(prop) }
+          : { op: "remove", ns: prop.ns, name: prop.name },
+      );
+    }
   }
-  return props;
+  return changes;
 }
 
 export interface LockInfo {
@@ -121,6 +130,7 @@ export function parseLockInfo(body: string): LockInfo | undefined {
   const scope = davChild(root, "lockscope");
   const type = davChild(root, "locktype");
   if (!scope || !type || !davChild(type, "write")) throw new DavError(400);
+  // Shared locks are not supported (supportedlock lists exclusive only); RFC 4918 allows that.
   if (!davChild(scope, "exclusive")) throw new DavError(400);
   const owner = davChild(root, "owner");
   let ownerXml: string | undefined;
@@ -162,21 +172,6 @@ export function lockTimeoutSeconds(req: Pick<IncomingMessage, "headers">): numbe
     if (match) return Math.min(Math.max(Number(match[1]), 1), MAX_LOCK_SECONDS);
   }
   return DEFAULT_LOCK_SECONDS;
-}
-
-/**
- * The state tokens a client submitted in its If header. Only lock tokens are evaluated (ETag
- * conditions and resource tags are ignored); a token under "Not" is not a submission.
- */
-export function submittedTokens(req: Pick<IncomingMessage, "headers">): Set<string> {
-  const tokens = new Set<string>();
-  const conditions = header(req, "if") ?? "";
-  for (const list of conditions.matchAll(/\(([^)]*)\)/g)) {
-    for (const item of (list[1] ?? "").matchAll(/(Not\s*)?<([^>]{1,200})>/gi)) {
-      if (!item[1]) tokens.add(item[2] ?? "");
-    }
-  }
-  return tokens;
 }
 
 /** The token of an UNLOCK request's Lock-Token header (`<token>`), or undefined. */

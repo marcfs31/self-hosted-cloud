@@ -17,9 +17,12 @@ import {
 } from "../files/storage.js";
 import { getOrCreateRoot, listChildren, usedBytes, type FileRow, type Tx } from "../files/tree.js";
 import { DavError } from "./errors.js";
+import { copyDeadProperties } from "./properties.js";
 import { childOf, resolve, resolveParent } from "./resolve.js";
 
 interface PlanNode {
+  /** The source file or folder; its dead properties go to the copy. */
+  sourceId: string;
   kind: "file" | "folder";
   name: string;
   /** Files: the version whose bytes are copied. */
@@ -47,6 +50,7 @@ export interface CopyRequest {
 
 function plan(tx: Tx, ownerId: string, row: FileRow, name: string, shallow: boolean): PlanNode {
   const node: PlanNode = {
+    sourceId: row.id,
     kind: row.kind,
     name,
     sourceVersionId: undefined,
@@ -139,9 +143,10 @@ export async function copyTree(req: CopyRequest): Promise<boolean> {
       const build = (parentId: string, node: PlanNode): void => {
         if (node.kind === "folder") {
           const id = createFolder(tx, user.id, parentId, node.name, at);
+          copyDeadProperties(tx, node.sourceId, id);
           for (const child of node.children) build(id, child);
         } else if (node.blob && node.newVersionId) {
-          commitFileVersion(tx, {
+          const id = commitFileVersion(tx, {
             ownerId: user.id,
             parentId,
             filename: node.name,
@@ -153,6 +158,7 @@ export async function copyTree(req: CopyRequest): Promise<boolean> {
             quotaChecked: true,
             exactName: true,
           });
+          copyDeadProperties(tx, node.sourceId, id);
         }
       };
       build(parent.id, { ...prepared.tree, name });
