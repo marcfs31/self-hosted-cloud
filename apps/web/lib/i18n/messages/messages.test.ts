@@ -12,6 +12,7 @@ const SAME_AS_ENGLISH: Record<string, readonly Locale[]> = {
   "auth.password": ["it"],
   "admin.users.email": ["it"],
   "admin.users.quota": ["pt-PT", "ca", "it"],
+  "system.checks.backup": ["it"],
   "files.table.versions": ["ca"],
   "files.versions.listLabel": ["ca"],
 };

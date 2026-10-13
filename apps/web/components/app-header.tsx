@@ -55,9 +55,22 @@ export function AppHeader() {
               <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
             {user.role === "admin" ? (
-              <li>
-                <NavLink href="/admin" label={t.common.nav.admin} current={pathname === "/admin"} />
-              </li>
+              <>
+                <li>
+                  <NavLink
+                    href="/admin"
+                    label={t.common.nav.admin}
+                    current={pathname === "/admin"}
+                  />
+                </li>
+                <li>
+                  <NavLink
+                    href="/admin/system"
+                    label={t.system.title}
+                    current={pathname === "/admin/system"}
+                  />
+                </li>
+              </>
             ) : null}
           </ul>
         </nav>
