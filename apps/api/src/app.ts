@@ -8,6 +8,8 @@ import { createSessionService } from "./auth/sessions.js";
 import type { Config } from "./config.js";
 import type { Db } from "./db/client.js";
 import { requireSameOrigin } from "./http/csrf.js";
+import { createFilesRouter } from "./files/routes.js";
+import { UPLOAD_PATH, createUploadService } from "./files/uploads.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
 
 export interface AppOptions {
@@ -36,14 +38,24 @@ function databaseState(db: Db): "ok" | "unavailable" {
   }
 }
 
-export function createApp({ config, version, db, now = Date.now }: AppOptions): express.Express {
+export type CloudApp = express.Express & {
+  /** Expire abandoned uploads; the server runs it hourly. */
+  cleanUpUploads: () => Promise<void>;
+};
+
+export function createApp({ config, version, db, now = Date.now }: AppOptions): CloudApp {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1); // behind Caddy
 
   const sessions = createSessionService({ db, config, now });
 
+  const uploads = createUploadService({ db, config, now });
+
   app.use("/api", requireSameOrigin(config.publicOrigin));
+  // tus owns its request bodies, so it is mounted before the JSON parser and without a mount
+  // path (tus derives the upload ID from the full URL).
+  app.all([UPLOAD_PATH, `${UPLOAD_PATH}/*rest`], sessions.requireUser, uploads.handler);
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/api/health", async (_req, res) => {
@@ -55,8 +67,9 @@ export function createApp({ config, version, db, now = Date.now }: AppOptions): 
 
   app.use("/api/auth", createAuthRouter({ db, sessions, now }));
   app.use("/api/admin", createAdminRouter({ db, sessions, now }));
+  app.use("/api", createFilesRouter({ db, sessions, config, now }));
   app.use("/api", notFoundHandler);
   app.use(errorHandler);
 
-  return app;
+  return Object.assign(app, { cleanUpUploads: uploads.cleanup });
 }
