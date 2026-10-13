@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Breadcrumb, FileKind, FileNode } from "@cloud/shared";
+import { recordChanges } from "../changes/record.js";
 import type { Db } from "../db/client.js";
 import { fileVersions, files } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
@@ -76,21 +77,33 @@ export function getOrCreateRoot(tx: Tx, ownerId: string, nowMs: number): FileRow
   const existing = findRoot(tx, ownerId);
   if (existing) return existing;
   const at = new Date(nowMs);
-  tx.insert(files)
-    .values({
-      id: crypto.randomUUID(),
-      ownerId,
-      parentId: null,
-      name: "",
-      kind: "folder",
-      createdAt: at,
-      updatedAt: at,
-    })
+  const id = crypto.randomUUID();
+  const inserted = tx
+    .insert(files)
+    .values({ id, ownerId, parentId: null, name: "", kind: "folder", createdAt: at, updatedAt: at })
     .onConflictDoNothing()
     .run();
   const created = findRoot(tx, ownerId);
   if (!created) throw new Error("root folder could not be created");
+  // Clients need the root's ID, so it enters the change feed like any other new item.
+  if (inserted.changes > 0) recordChanges(tx, ownerId, [id], nowMs);
   return created;
+}
+
+/** The item and every descendant that is not itself trashed, parents before children. */
+export function activeSubtree(tx: Tx, id: string): string[] {
+  return tx
+    .all<{ id: string }>(
+      sql`
+      with recursive subtree(id, depth) as (
+        select id, 0 from files where id = ${id}
+        union all
+        select f.id, s.depth + 1 from files f join subtree s on f.parent_id = s.id
+         where f.deleted_at is null and s.depth < 4096
+      )
+      select id from subtree order by depth asc`,
+    )
+    .map((r) => r.id);
 }
 
 export function activeSiblingNames(tx: Tx, parentId: string): Set<string> {

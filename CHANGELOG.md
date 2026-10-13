@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-13
+
+### Added
+
+- `cloud` command-line tool: `login` (with an app password, stored with owner-only file
+  permissions), `whoami`, `ls`, `upload` (resumable, `--recursive`, `--replace`), `download`,
+  `mkdir`, `mv`, `rm` (to the trash), `search` and `share`; `--json` output for scripts and
+  distinct exit codes per failure kind.
+
+## [0.12.0] - 2026-10-13
+
+### Added
+
+- The activity log now also records uploads (including drop-box uploads), moves to the trash,
+  restores, permanent deletes (marked when done by the 30-day clean-up) and share links
+  created or revoked.
+- Change feed (`GET /api/changes`) for sync clients: each changed item's latest state since a
+  cursor, usable with an app password. Existing files are included from the first sync.
+
 ## [0.11.0] - 2026-10-13
 
 ### Added

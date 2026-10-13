@@ -6,6 +6,7 @@ import {
   type ListSharesResponse,
   type Share,
 } from "@cloud/shared";
+import { recordActivity } from "../activity/record.js";
 import { hashPassword } from "../auth/passwords.js";
 import { authOf, type SessionService } from "../auth/sessions.js";
 import { hashToken, newToken } from "../auth/tokens.js";
@@ -66,6 +67,14 @@ export function createSharesRouter(opts: {
         })
         .returning()
         .get();
+      recordActivity(tx, {
+        userId: user.id,
+        type: "share_created",
+        fileId: target.id,
+        detail: { name: target.name, kind: target.kind },
+        ip: req.ip,
+        at,
+      });
       return toShare(row, target.name);
     });
     const response: CreatedShareResponse = { share: created, token };
@@ -87,15 +96,31 @@ export function createSharesRouter(opts: {
 
   router.delete("/shares/:id", (req, res) => {
     const { user } = authOf(res);
-    const revoked = db
-      .update(shares)
-      .set({ revokedAt: new Date(now()) })
-      .where(
-        and(eq(shares.id, req.params.id), eq(shares.ownerId, user.id), isNull(shares.revokedAt)),
-      )
-      .returning({ id: shares.id })
-      .all();
-    if (revoked.length === 0) throw new HttpError(404, "not_found");
+    db.transaction((tx) => {
+      const at = now();
+      const revoked = tx
+        .update(shares)
+        .set({ revokedAt: new Date(at) })
+        .where(
+          and(eq(shares.id, req.params.id), eq(shares.ownerId, user.id), isNull(shares.revokedAt)),
+        )
+        .returning({ fileId: shares.fileId, kind: shares.kind })
+        .all()[0];
+      if (!revoked) throw new HttpError(404, "not_found");
+      const target = tx
+        .select({ name: files.name })
+        .from(files)
+        .where(eq(files.id, revoked.fileId))
+        .get();
+      recordActivity(tx, {
+        userId: user.id,
+        type: "share_revoked",
+        fileId: revoked.fileId,
+        detail: { name: target?.name ?? "", kind: revoked.kind },
+        ip: req.ip,
+        at,
+      });
+    });
     res.status(204).end();
   });
 
