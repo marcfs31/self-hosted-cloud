@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useT } from "../../lib/i18n/provider";
 import { useSession } from "../../lib/session";
 import { NotFoundState } from "../not-found-state";
 import { InvitesSection } from "./invites-section";
+import { SecurityActivitySection } from "./security-activity-section";
 import { UsersSection } from "./users-section";
 
 export function AdminView() {
@@ -15,8 +17,13 @@ export function AdminView() {
   return (
     <>
       <h1>{t.admin.title}</h1>
+      <p>
+        <Link href="/admin/system">{t.system.adminLink}</Link>
+        <span className="note"> · {t.system.adminLinkNote}</span>
+      </p>
       <UsersSection me={user} />
       <InvitesSection />
+      <SecurityActivitySection />
     </>
   );
 }

@@ -1,0 +1,117 @@
+import type { Shares } from "./en";
+
+export const ca: Shares = {
+  title: "Enllaços compartits",
+  menuShare: "Comparteix…",
+  loading: "Carregant els teus enllaços compartits…",
+  caption: "Els teus enllaços compartits",
+  intro:
+    "Qui tingui un d'aquests enllaços pot obrir el que comparteix. Un enllaç només es mostra una vegada, quan el crees.",
+  columns: {
+    item: "Element",
+    kind: "Tipus",
+    dropBox: "Bústia de lliurament",
+    password: "Contrasenya",
+    created: "Creat",
+    expires: "Caduca",
+    actions: "Accions",
+  },
+  kind: {
+    file: "Fitxer",
+    folder: "Carpeta",
+  },
+  yes: "Sí",
+  no: "No",
+  never: "Mai",
+  expired: (date) => `${date} (caducat)`,
+  empty: {
+    title: "Encara no has compartit res",
+    hint: "Tria Comparteix… al menú d'un fitxer o una carpeta per crear un enllaç.",
+  },
+  revoke: "Revoca",
+  revokeLabel: (name) => `Revoca l'enllaç a ${name}`,
+  confirm: {
+    title: "Vols revocar aquest enllaç?",
+    body: (name) => `Qui tingui l'enllaç a ${name} perdrà l'accés a l'instant. No es pot desfer.`,
+    cancel: "Cancel·la",
+    submit: "Revoca l'enllaç",
+    submitting: "Revocant…",
+  },
+  notices: {
+    revoked: (name) => `S'ha revocat l'enllaç a ${name}`,
+  },
+  password: {
+    show: "Mostra la contrasenya",
+    hide: "Amaga la contrasenya",
+  },
+  share: {
+    title: (name) => `Comparteix ${name}`,
+    expiryLabel: "L'enllaç caduca",
+    expiry: {
+      "1": "Al cap d'1 dia",
+      "7": "Al cap de 7 dies",
+      "30": "Al cap de 30 dies",
+      "365": "Al cap d'1 any",
+      never: "Mai",
+    },
+    passwordLabel: "Contrasenya (opcional)",
+    passwordHint: "Com a mínim 8 caràcters. Envia-la per separat de l'enllaç.",
+    passwordTooShort: "Fes servir com a mínim 8 caràcters o deixa la contrasenya buida.",
+    dropBox:
+      "Deixa que altres persones pugin fitxers (bústia de lliurament: no veuen el contingut de la carpeta)",
+    submit: "Crea l'enllaç",
+    submitting: "Creant…",
+    cancel: "Cancel·la",
+    created: {
+      title: "El teu enllaç és a punt",
+      linkLabel: "Enllaç",
+      copy: "Copia l'enllaç",
+      copied: "S'ha copiat l'enllaç.",
+      copyFailed: "No s'ha pogut copiar automàticament. Selecciona l'enllaç i copia'l tu.",
+      once: "Aquesta és l'única vegada que es mostra l'enllaç. Copia'l ara; si el perds, en crees un de nou.",
+      expires: (date) => `Funciona fins al ${date}.`,
+      neverExpires: "Funciona fins que el revoquis.",
+      protected: "Les persones necessitaran la contrasenya per obrir-lo.",
+      manage: "Pots revocar-lo en qualsevol moment a la pàgina Enllaços compartits.",
+      done: "Fet",
+    },
+  },
+  public: {
+    pageTitle: "Enllaç compartit",
+    loading: "Obrint l'enllaç…",
+    expiresOn: (date) => `Aquest enllaç funciona fins al ${date}.`,
+    notFound: {
+      title: "Aquest enllaç no funciona",
+      body: "Pot haver caducat, haver-lo retirat qui el va crear o estar mal escrit. Demana un enllaç nou a qui te'l va enviar.",
+    },
+    locked: {
+      title: "Aquest enllaç està protegit",
+      body: "Escriu la contrasenya que et van donar per obrir-lo.",
+      label: "Contrasenya",
+      submit: "Obre",
+      submitting: "Comprovant…",
+      wrong: "Aquesta contrasenya no és correcta. Torna-ho a provar.",
+    },
+    file: {
+      size: (size) => `Mida: ${size}`,
+      download: "Baixa",
+    },
+    folder: {
+      caption: (folder) => `Contingut de ${folder}`,
+      empty: "No hi ha res en aquesta carpeta.",
+      download: "Baixa",
+      downloadLabel: (name) => `Baixa ${name}`,
+      downloadAll: "Baixa-ho tot (.zip)",
+    },
+    dropbox: {
+      title: (name) => `Envia fitxers a ${name}`,
+      intro:
+        "Els teus fitxers van directament a la carpeta. No veuràs què hi ha dins, ni ningú més amb aquest enllaç.",
+      choose: "Tria fitxers",
+      dropHint: "o deixa anar els fitxers aquí",
+      dropActive: "Deixa anar els fitxers per enviar-los",
+      full: "Aquests fitxers no hi caben: l'emmagatzematge de qui els rep està ple.",
+      gone: "Aquesta bústia de lliurament s'ha tancat. Demana un enllaç nou a qui la va compartir.",
+    },
+  },
+};

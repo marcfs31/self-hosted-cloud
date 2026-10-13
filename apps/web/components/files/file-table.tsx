@@ -4,19 +4,24 @@ import Link from "next/link";
 import type { FileNode } from "@cloud/shared";
 import { downloadHref } from "../../lib/files-api";
 import { useFormat, useT } from "../../lib/i18n/provider";
+import { isPreviewable } from "../../lib/preview";
 import { FileIcon } from "./file-icon";
+import { previewTriggerProps } from "./preview-dialog";
 import { RowMenu, type MenuItem } from "./row-menu";
 
-export type RowAction = "rename" | "move" | "versions" | "trash";
+export type RowAction = "rename" | "move" | "share" | "versions" | "trash";
 
 interface FileTableProps {
   folderName: string;
   nodes: readonly FileNode[];
   onAction: (action: RowAction, node: FileNode, trigger: HTMLButtonElement) => void;
+  /** Called when the name of a previewable file is activated. */
+  onPreview: (node: FileNode) => void;
 }
 
-export function FileTable({ folderName, nodes, onAction }: FileTableProps) {
-  const t = useT().files;
+export function FileTable({ folderName, nodes, onAction, onPreview }: FileTableProps) {
+  const all = useT();
+  const t = all.files;
   const format = useFormat();
 
   function itemsFor(node: FileNode): MenuItem[] {
@@ -34,6 +39,7 @@ export function FileTable({ folderName, nodes, onAction }: FileTableProps) {
           },
       { key: "rename", label: t.rowMenu.rename, onSelect: choose("rename") },
       { key: "move", label: t.rowMenu.move, onSelect: choose("move") },
+      { key: "share", label: all.shares.menuShare, onSelect: choose("share") },
       ...(node.kind === "file"
         ? [{ key: "versions", label: t.rowMenu.versions, onSelect: choose("versions") }]
         : []),
@@ -63,6 +69,17 @@ export function FileTable({ folderName, nodes, onAction }: FileTableProps) {
                 <span>
                   {node.kind === "folder" ? (
                     <Link href={`/folders/${encodeURIComponent(node.id)}`}>{node.name}</Link>
+                  ) : isPreviewable(node) ? (
+                    <button
+                      type="button"
+                      className="link-button"
+                      {...previewTriggerProps(node.id)}
+                      onClick={() => {
+                        onPreview(node);
+                      }}
+                    >
+                      {node.name}
+                    </button>
                   ) : (
                     node.name
                   )}

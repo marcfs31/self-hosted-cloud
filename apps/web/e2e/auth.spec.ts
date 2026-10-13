@@ -170,7 +170,8 @@ test("admin changes a member's quota", async ({ page }) => {
   await page.getByRole("button", { name: "Log in" }).click();
   await page.getByRole("link", { name: "Admin" }).click();
 
-  const row = page.getByRole("row", { name: new RegExp(MEMBER.email) });
+  const users = page.getByRole("table", { name: "Users" });
+  const row = users.getByRole("row", { name: new RegExp(MEMBER.email) });
   const quota = row.getByLabel(`Quota in GiB for ${MEMBER.email}`);
   await expect(quota).toHaveValue("100");
   await quota.fill("1.5");
@@ -179,7 +180,7 @@ test("admin changes a member's quota", async ({ page }) => {
 
   await page.reload();
   await expect(
-    page.getByRole("row", { name: new RegExp(MEMBER.email) }).getByLabel(/^Quota in GiB/),
+    users.getByRole("row", { name: new RegExp(MEMBER.email) }).getByLabel(/^Quota in GiB/),
   ).toHaveValue("1.5");
 
   await quota.fill("lots");

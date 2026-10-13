@@ -12,8 +12,22 @@ const SAME_AS_ENGLISH: Record<string, readonly Locale[]> = {
   "auth.password": ["it"],
   "admin.users.email": ["it"],
   "admin.users.quota": ["pt-PT", "ca", "it"],
+  "system.checks.backup": ["it"],
   "files.table.versions": ["ca"],
+  "shares.columns.password": ["it"],
+  "shares.public.locked.label": ["it"],
+  "shares.kind.file": ["it"],
+  "shares.columns.item": ["pt-PT"],
+  "shares.no": ["es", "ca", "it"],
+  "shares.share.created.linkLabel": ["it"],
   "files.versions.listLabel": ["ca"],
+  "security.totp.passwordLabel": ["it"],
+  "activity.colAccount": ["it"],
+  "activity.methods.password": ["it"],
+  "activity.methods.passkey": ["it"],
+  "activity.detail.file": ["it"],
+  "activity.detail.passkey": ["it"],
+  "photos.video": ["it"],
 };
 
 const SAMPLE_ARGS = ["alice@example.test", "Admin", "13 Oct 2026"];

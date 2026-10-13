@@ -1,0 +1,53 @@
+import { isOne } from "../../plural";
+import type { Activity } from "./en";
+
+export const it: Activity = {
+  title: "Attività",
+  intro: "Cosa è successo sul tuo account, dal più recente al più vecchio.",
+  settingsLink: "Impostazioni di sicurezza",
+  loading: "Caricamento dell'attività…",
+  empty: "Non c'è ancora nulla da mostrare.",
+  caption: "Attività",
+  colEvent: "Evento",
+  colAccount: "Account",
+  colWhen: "Quando",
+  colIp: "Indirizzo IP",
+  colDetails: "Dettagli",
+  noIp: "Non registrato",
+  loadMore: "Carica altri",
+  loadingMore: "Caricamento…",
+  loadedMore: (n) =>
+    isOne("it", n) ? `Caricato ${n} altro evento.` : `Caricati altri ${n} eventi.`,
+  end: "Questo è tutto.",
+  events: {
+    login_succeeded: "Accesso effettuato",
+    login_failed: "Tentativo di accesso non riuscito",
+    logout: "Disconnessione",
+    passkey_added: "Passkey aggiunta",
+    passkey_removed: "Passkey rimossa",
+    totp_enabled: "Verifica in due passaggi attivata",
+    totp_disabled: "Verifica in due passaggi disattivata",
+    mfa_reset_by_admin: "Verifica in due passaggi reimpostata da un amministratore",
+    app_password_created: "Password per app creata",
+    app_password_revoked: "Password per app revocata",
+    upload: "File caricato",
+    trash: "Spostato nel cestino",
+    restore: "Ripristinato dal cestino",
+    purge: "Eliminato definitivamente",
+    share_created: "Link di condivisione creato",
+    share_revoked: "Link di condivisione revocato",
+  },
+  methods: {
+    password: "Password",
+    totp: "Codice di autenticazione",
+    recovery_code: "Codice di recupero",
+    passkey: "Passkey",
+  },
+  detail: {
+    method: (method) => `Metodo: ${method}`,
+    file: (name) => `File: ${name}`,
+    passkey: (name) => `Passkey: ${name}`,
+    appPassword: (name) => `Password per app: ${name}`,
+    by: (email) => `Eseguito da ${email}`,
+  },
+};

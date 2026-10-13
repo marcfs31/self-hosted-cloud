@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { THUMBNAIL_SIZES } from "@cloud/shared";
 
 /*
  * The only module that builds filesystem paths for stored data. Paths are made from server-issued
@@ -25,6 +26,15 @@ export function blobPath(dataDir: string, ownerId: string, versionId: string): s
   const owner = assertUuid(ownerId);
   const version = assertUuid(versionId);
   return resolve(join(dataDir, "files", owner, version.slice(0, 2), version));
+}
+
+/** <dataDir>/thumbs/<versionId[0..2]>/<versionId>-<size>.webp; the size is one of THUMBNAIL_SIZES. */
+export function thumbPath(dataDir: string, versionId: string, size: number): string {
+  const version = assertUuid(versionId);
+  if (!(THUMBNAIL_SIZES as readonly number[]).includes(size)) {
+    throw new Error("storage: unsupported thumbnail size");
+  }
+  return resolve(join(dataDir, "thumbs", version.slice(0, 2), `${version}-${size}.webp`));
 }
 
 export function uploadsDir(dataDir: string): string {
@@ -65,16 +75,27 @@ export async function commitBlob(
   return { size, sha256: hash.digest("hex") };
 }
 
-/** Best effort: a failure is logged and never undoes the metadata change that preceded it. */
+async function unlinkQuietly(path: string, what: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    console.error(`${what} unlink failed:`, (err as NodeJS.ErrnoException).code ?? "unknown");
+  }
+}
+
+/**
+ * Best effort: a failure is logged and never undoes the metadata change that preceded it. The
+ * version's cached thumbnails go with its bytes, so every path that drops a blob (purge, version
+ * delete, abandoned upload) drops them too.
+ */
 export async function removeBlob(
   dataDir: string,
   ownerId: string,
   versionId: string,
 ): Promise<void> {
-  try {
-    await unlink(blobPath(dataDir, ownerId, versionId));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
-    console.error("blob unlink failed:", (err as NodeJS.ErrnoException).code ?? "unknown");
+  await unlinkQuietly(blobPath(dataDir, ownerId, versionId), "blob");
+  for (const size of THUMBNAIL_SIZES) {
+    await unlinkQuietly(thumbPath(dataDir, versionId, size), "thumbnail");
   }
 }

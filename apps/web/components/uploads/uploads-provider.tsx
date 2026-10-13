@@ -35,8 +35,17 @@ interface UploadsContext {
 
 const Context = createContext<UploadsContext | null>(null);
 
+interface UploadsProviderProps {
+  children: ReactNode;
+  /**
+   * A drop box's tus endpoint. Uploads then go there and name no folder, because the server
+   * fixes it; without it they go to the signed-in endpoint, into the folder given to enqueue.
+   */
+  endpoint?: string;
+}
+
 /** Lives above the pages, so an upload keeps running while the person browses elsewhere. */
-export function UploadsProvider({ children }: { children: ReactNode }) {
+export function UploadsProvider({ children, endpoint }: UploadsProviderProps) {
   const [state, dispatch] = useReducer(queueReducer, initialQueue);
   const files = useRef(new Map<string, File>());
   const handles = useRef(new Map<string, UploadHandle>());
@@ -51,7 +60,9 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
         continue;
       }
       const handle = createUpload(
-        { file, parentId: item.parentId, replaceId: item.replaceId },
+        endpoint === undefined
+          ? { file, parentId: item.parentId, replaceId: item.replaceId }
+          : { file, parentId: null, replaceId: null, endpoint },
         {
           onProgress: (sent) => {
             dispatch({ type: "progress", id, sent });
@@ -68,7 +79,7 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "started", id });
       handle.start();
     }
-  }, [state]);
+  }, [state, endpoint]);
 
   // Forget the files and handles of items that were removed from the panel.
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { ADMIN_NAV } from "./nav";
 import AxeBuilder from "@axe-core/playwright";
 import {
   expect,
@@ -100,12 +101,9 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByText("This folder is empty")).toBeVisible();
   await expect(page.getByRole("meter", { name: "Storage" })).toBeVisible();
   await expect(page.getByText("of 100 GiB used")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
-    "Files",
-    "Trash",
-    "Phone backup",
-    "Admin",
-  ]);
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText(
+    ADMIN_NAV,
+  );
   await expect(page).toHaveTitle(/^Files · Cloud$/);
   await expectNoViolations();
 });
@@ -146,7 +144,7 @@ test("the row menu works from the keyboard", async () => {
   await page.keyboard.press("Enter");
   const items = page.getByRole("menuitem");
   await expect(items.first()).toBeFocused();
-  await expect(items).toHaveText(["Open", "Rename", "Move…", "Move to trash"]);
+  await expect(items).toHaveText(["Open", "Rename", "Move…", "Share…", "Move to trash"]);
   await page.keyboard.press("ArrowDown");
   await expect(items.nth(1)).toBeFocused();
   await page.keyboard.press("End");
@@ -502,7 +500,8 @@ test("the trash is emptied after a confirmation", async () => {
 
 test("storage in use includes every version, and the admin table shows used and quota", async () => {
   await page.goto("/admin");
-  const row = page.getByRole("row", { name: new RegExp(ADMIN.email) });
+  const users = page.getByRole("table", { name: "Users" });
+  const row = users.getByRole("row", { name: new RegExp(ADMIN.email) });
   await expect(row).toContainText("of 100 GiB");
   await expect(page.getByRole("columnheader", { name: "Storage used" })).toBeVisible();
 });

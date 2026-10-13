@@ -6,8 +6,15 @@ interface DialogProps {
   title: string;
   /** Called when the dialog is dismissed with Escape. Close buttons call the parent directly. */
   onClose: () => void;
-  /** Gets the focus back when the dialog goes away; the page's main area otherwise. */
-  returnFocus?: HTMLElement | null;
+  /**
+   * Gets the focus back when the dialog goes away; the page's main area otherwise. A function
+   * is called at that moment, for a target that changes while the dialog is open.
+   */
+  returnFocus?: HTMLElement | (() => HTMLElement | null) | null;
+  /** Nearly the full width, for content like a photo. */
+  wide?: boolean;
+  /** Extra class on the <dialog>, for a variant such as the full-screen preview. */
+  className?: string;
   children: ReactNode;
 }
 
@@ -15,7 +22,14 @@ interface DialogProps {
  * A modal built on the native <dialog>: the browser makes the rest of the page inert, traps
  * focus and closes on Escape. Mount it to open it and unmount it to close it.
  */
-export function Dialog({ title, onClose, returnFocus, children }: DialogProps) {
+export function Dialog({
+  title,
+  onClose,
+  returnFocus,
+  wide = false,
+  className,
+  children,
+}: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const returnTo = useRef(returnFocus);
@@ -29,15 +43,20 @@ export function Dialog({ title, onClose, returnFocus, children }: DialogProps) {
       dialog.showModal();
     }
     dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-    const target = returnTo.current;
     return () => {
+      const target = typeof returnTo.current === "function" ? returnTo.current() : returnTo.current;
       const back = target?.isConnected ? target : document.getElementById("main");
       back?.focus();
     };
   }, []);
 
   return (
-    <dialog ref={ref} className="dialog" aria-labelledby={titleId} onClose={onClose}>
+    <dialog
+      ref={ref}
+      className={["dialog", wide ? "dialog-wide" : "", className ?? ""].filter(Boolean).join(" ")}
+      aria-labelledby={titleId}
+      onClose={onClose}
+    >
       <div className="dialog-body stack">
         <h2 id={titleId}>{title}</h2>
         {children}

@@ -1,7 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { Router, type Response } from "express";
+import { Router } from "express";
 import {
-  INLINE_MIME_TYPES,
   TRASH_RETENTION_DAYS,
   createFolderRequest,
   existsRequest,
@@ -20,7 +19,8 @@ import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
 import { fileVersions, files } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
-import { blobPath, removeBlob } from "./storage.js";
+import { findVersion, sendBlob } from "./content.js";
+import { removeBlob } from "./storage.js";
 import { purgeAllTrashed, purgeItem } from "./trash.js";
 import {
   activeSiblingNames,
@@ -36,12 +36,7 @@ import {
   usedBytes,
   type FileRow,
   type Tx,
-  type VersionRow,
 } from "./tree.js";
-
-const CONTENT_CSP =
-  "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'";
-const INLINE = new Set<string>(INLINE_MIME_TYPES);
 
 function listing(tx: Tx, ownerId: string, folder: FileRow): FolderListing {
   return {
@@ -49,22 +44,6 @@ function listing(tx: Tx, ownerId: string, folder: FileRow): FolderListing {
     breadcrumbs: breadcrumbsOf(tx, folder.id),
     children: listChildren(tx, ownerId, folder.id),
   };
-}
-
-function findVersion(tx: Tx, ownerId: string, fileId: string, versionId: string): VersionRow {
-  const row = tx
-    .select()
-    .from(fileVersions)
-    .where(
-      and(
-        eq(fileVersions.id, versionId),
-        eq(fileVersions.fileId, fileId),
-        eq(fileVersions.ownerId, ownerId),
-      ),
-    )
-    .get();
-  if (!row) throw new HttpError(404, "not_found");
-  return row;
 }
 
 export function createFilesRouter(opts: {
@@ -159,59 +138,17 @@ export function createFilesRouter(opts: {
     res.status(204).end();
   });
 
-  function sendBlob(
-    req: { query: Record<string, unknown> },
-    res: Response,
-    file: FileRow,
-    version: VersionRow,
-  ): void {
-    const inline = INLINE.has(version.mime) && req.query.download !== "1";
-    // res.attachment builds a safe RFC 6266 / RFC 5987 header from the name; inline reuses it.
-    res.attachment(file.name);
-    if (inline) {
-      res.setHeader(
-        "Content-Disposition",
-        String(res.getHeader("Content-Disposition")).replace(/^attachment/, "inline"),
-      );
-      res.setHeader(
-        "Content-Type",
-        version.mime === "text/plain" ? "text/plain; charset=utf-8" : version.mime,
-      );
-    } else {
-      res.setHeader("Content-Type", "application/octet-stream");
-    }
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Content-Security-Policy", CONTENT_CSP);
-    res.setHeader("Cache-Control", "private, no-cache");
-    res.sendFile(
-      blobPath(config.dataDir, version.ownerId, version.id),
-      { dotfiles: "allow", cacheControl: false },
-      (err) => {
-        if (!err || res.headersSent) return;
-        const e = err as { status?: number; code?: string; headers?: Record<string, string> };
-        if (e.status === 416) {
-          res
-            .set(e.headers ?? {})
-            .status(416)
-            .end();
-          return;
-        }
-        if (e.code === "ENOENT" || e.status === 404) {
-          console.error("blob missing for version", version.id);
-          res.status(404).json({ error: { code: "not_found" } });
-          return;
-        }
-        console.error("sendFile failed:", e.code ?? e.status ?? "unknown");
-        res.status(500).json({ error: { code: "internal" } });
-      },
-    );
-  }
-
   router.get("/files/:id/content", (req, res) => {
     const { user } = authOf(res);
     const file = requireActive(db, user.id, req.params.id, "file");
     if (!file.currentVersionId) throw new HttpError(404, "not_found");
-    sendBlob(req, res, file, findVersion(db, user.id, file.id, file.currentVersionId));
+    sendBlob(
+      config.dataDir,
+      req,
+      res,
+      file,
+      findVersion(db, user.id, file.id, file.currentVersionId),
+    );
   });
 
   router.get("/files/:id/versions", (req, res) => {
@@ -238,7 +175,13 @@ export function createFilesRouter(opts: {
   router.get("/files/:id/versions/:versionId/content", (req, res) => {
     const { user } = authOf(res);
     const file = requireActive(db, user.id, req.params.id, "file");
-    sendBlob(req, res, file, findVersion(db, user.id, file.id, req.params.versionId));
+    sendBlob(
+      config.dataDir,
+      req,
+      res,
+      file,
+      findVersion(db, user.id, file.id, req.params.versionId),
+    );
   });
 
   router.post("/files/:id/versions/:versionId/restore", (req, res) => {

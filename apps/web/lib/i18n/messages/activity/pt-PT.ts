@@ -1,0 +1,53 @@
+import { isOne } from "../../plural";
+import type { Activity } from "./en";
+
+export const ptPT: Activity = {
+  title: "Atividade",
+  intro: "O que aconteceu na sua conta, do mais recente para o mais antigo.",
+  settingsLink: "Definições de segurança",
+  loading: "A carregar a atividade…",
+  empty: "Ainda não há nada para mostrar.",
+  caption: "Atividade",
+  colEvent: "Evento",
+  colAccount: "Conta",
+  colWhen: "Quando",
+  colIp: "Endereço IP",
+  colDetails: "Detalhes",
+  noIp: "Não registado",
+  loadMore: "Carregar mais",
+  loadingMore: "A carregar…",
+  loadedMore: (n) =>
+    isOne("pt-PT", n) ? `Foi carregado mais ${n} evento.` : `Foram carregados mais ${n} eventos.`,
+  end: "É tudo.",
+  events: {
+    login_succeeded: "Sessão iniciada",
+    login_failed: "Tentativa de início de sessão falhada",
+    logout: "Sessão terminada",
+    passkey_added: "Chave de acesso adicionada",
+    passkey_removed: "Chave de acesso removida",
+    totp_enabled: "Verificação em dois passos ativada",
+    totp_disabled: "Verificação em dois passos desativada",
+    mfa_reset_by_admin: "Verificação em dois passos reposta por um administrador",
+    app_password_created: "Palavra-passe de aplicação criada",
+    app_password_revoked: "Palavra-passe de aplicação revogada",
+    upload: "Ficheiro carregado",
+    trash: "Movido para a reciclagem",
+    restore: "Restaurado da reciclagem",
+    purge: "Eliminado definitivamente",
+    share_created: "Ligação de partilha criada",
+    share_revoked: "Ligação de partilha revogada",
+  },
+  methods: {
+    password: "Palavra-passe",
+    totp: "Código de autenticação",
+    recovery_code: "Código de recuperação",
+    passkey: "Chave de acesso",
+  },
+  detail: {
+    method: (method) => `Método: ${method}`,
+    file: (name) => `Ficheiro: ${name}`,
+    passkey: (name) => `Chave de acesso: ${name}`,
+    appPassword: (name) => `Palavra-passe de aplicação: ${name}`,
+    by: (email) => `Feito por ${email}`,
+  },
+};

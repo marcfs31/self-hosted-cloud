@@ -175,13 +175,22 @@ findmnt /data
 If you use a spare partition on the NVMe instead, create it with `parted`/`raspi-config`
 before the Imager step and use its device in place of `/dev/sda1`.
 
-Directories, owned by uid/gid 1000, the `node` user inside the containers:
+Directories, owned by uid/gid 1000, the `node` user inside the containers, except
+`/data/status`, which is root-owned:
 
 ```bash
-sudo mkdir -p /data/files /data/db /data/tmp /data/thumbs /data/backups
+sudo mkdir -p /data/files /data/db /data/tmp /data/thumbs /data/backups /data/status
 sudo chown -R 1000:1000 /data
 sudo chmod 750 /data
+sudo chown root:root /data/status        # after the chown -R above
+sudo chmod 0755 /data/status
 ```
+
+`/data/backups` holds the database snapshot the API writes (uid 1000). `/data/status` holds
+the reports the host scripts (root) write for the admin dashboard; the API reads them, so
+they are world-readable, but the directory is root-owned so the API cannot create or alter
+them. The scripts do not create it: if `/data` is not mounted they fail instead of writing
+reports onto the root filesystem.
 
 Make Docker wait for the disk and for Tailscale. Without this a missing `/data` would let
 the API start against an empty directory on the root filesystem:

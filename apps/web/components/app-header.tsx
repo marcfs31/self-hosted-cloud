@@ -8,6 +8,7 @@ import { errorCodeOf } from "../lib/api";
 import { useT } from "../lib/i18n/provider";
 import { useSession } from "../lib/session";
 import { LocaleSwitcher } from "./locale-switcher";
+import { SearchBox } from "./search-box";
 
 function NavLink({ href, label, current }: { href: string; label: string; current: boolean }) {
   return (
@@ -52,18 +53,45 @@ export function AppHeader() {
               />
             </li>
             <li>
+              <NavLink
+                href="/photos"
+                label={t.photos.nav}
+                current={pathname === "/photos" || pathname.startsWith("/albums")}
+              />
+              <NavLink href="/shares" label={t.shares.title} current={pathname === "/shares"} />
+            </li>
+            <li>
               <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
             <li>
               <NavLink href="/backup" label={t.pwa.nav.backup} current={pathname === "/backup"} />
+              <NavLink
+                href="/settings"
+                label={t.security.nav.settings}
+                current={pathname === "/settings"}
+              />
             </li>
             {user.role === "admin" ? (
-              <li>
-                <NavLink href="/admin" label={t.common.nav.admin} current={pathname === "/admin"} />
-              </li>
+              <>
+                <li>
+                  <NavLink
+                    href="/admin"
+                    label={t.common.nav.admin}
+                    current={pathname === "/admin"}
+                  />
+                </li>
+                <li>
+                  <NavLink
+                    href="/admin/system"
+                    label={t.system.title}
+                    current={pathname === "/admin/system"}
+                  />
+                </li>
+              </>
             ) : null}
           </ul>
         </nav>
+        <SearchBox />
         <div className="header-user">
           <LocaleSwitcher />
           <span className="user-email">{user.email}</span>

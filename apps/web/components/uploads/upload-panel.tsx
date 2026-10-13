@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import type { ErrorCode } from "@cloud/shared";
 import { useFormat, useT } from "../../lib/i18n/provider";
 import {
   isActive,
@@ -29,7 +30,9 @@ function useSummaryText(summary: QueueSummary, announced: boolean): string {
   return summary.done > 0 ? t.finished(summary.done) : t.idle;
 }
 
-function ItemRow({ item }: { item: UploadItem }) {
+type ErrorOverrides = Partial<Record<ErrorCode, string>>;
+
+function ItemRow({ item, errors }: { item: UploadItem; errors: ErrorOverrides }) {
   const all = useT();
   const t = all.files.uploads;
   const format = useFormat();
@@ -40,7 +43,7 @@ function ItemRow({ item }: { item: UploadItem }) {
     item.status === "uploading"
       ? t.status.uploading(percent)
       : item.status === "error"
-        ? all.errors[item.error ?? "internal"]
+        ? (errors[item.error ?? "internal"] ?? all.errors[item.error ?? "internal"])
         : t.status[item.status];
 
   return (
@@ -136,7 +139,8 @@ function ItemRow({ item }: { item: UploadItem }) {
   );
 }
 
-export function UploadPanel() {
+/** `errors` words a failure differently where the generic copy would mislead (a public drop box). */
+export function UploadPanel({ errors = {} }: { errors?: ErrorOverrides }) {
   const t = useT().files.uploads;
   const { items, clearFinished } = useUploads();
   const headingId = useId();
@@ -166,7 +170,7 @@ export function UploadPanel() {
           <p className="note">{visible}</p>
           <ul className="upload-list">
             {items.map((item) => (
-              <ItemRow key={item.id} item={item} />
+              <ItemRow key={item.id} item={item} errors={errors} />
             ))}
           </ul>
         </section>

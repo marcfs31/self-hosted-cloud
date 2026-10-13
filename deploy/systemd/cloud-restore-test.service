@@ -1,0 +1,12 @@
+[Unit]
+Description=Cloud restore test (restore latest snapshot, verify database and file count)
+Wants=network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+# Tests the primary repository; run the script by hand with the off-site env file to test that one.
+ExecStart=/opt/cloud/scripts/restore-test.sh /etc/cloud/restic.env
+TimeoutStartSec=12h
+Nice=10
+IOSchedulingClass=idle

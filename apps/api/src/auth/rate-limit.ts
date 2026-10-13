@@ -13,6 +13,9 @@ export interface RateLimiterOptions {
   now?: () => number;
 }
 
+/** Shared by every guessable secret: 5 failures per key in 15 minutes. */
+export const FAILURE_LIMIT = { max: 5, windowMs: 15 * 60 * 1000 } as const;
+
 export function createRateLimiter({
   max,
   windowMs,

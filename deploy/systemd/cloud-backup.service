@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloud nightly backup (SQLite snapshot + restic)
+Wants=network-online.target
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# One database snapshot, then every listed restic repository. Remove the second file if
+# you only have one repository; each file is documented in deploy/operations.md.
+ExecStart=/opt/cloud/scripts/backup.sh /etc/cloud/restic.env /etc/cloud/restic-offsite.env
+TimeoutStartSec=6h
+Nice=10
+IOSchedulingClass=idle

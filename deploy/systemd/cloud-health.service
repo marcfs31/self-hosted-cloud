@@ -1,0 +1,10 @@
+[Unit]
+Description=Cloud health check (endpoint, free space, SMART)
+After=docker.service
+
+[Service]
+Type=oneshot
+# Exit 1 = a check failed, exit 2 = a check could not run. Both leave the unit "failed"
+# so `systemctl --failed` shows it; the journal says which check.
+ExecStart=/opt/cloud/scripts/health-check.sh
+TimeoutStartSec=2min
