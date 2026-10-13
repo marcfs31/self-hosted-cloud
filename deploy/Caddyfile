@@ -18,8 +18,9 @@
 	}
 
 	# Compress everything except file downloads: they are mostly already-compressed media,
-	# and compression would get in the way of Range requests (video seeking).
-	@compressible not path /api/files/*/content
+	# and compression would get in the way of Range requests (video seeking). WebDAV (/dav)
+	# carries file bodies too, and some clients mishandle encoded 207 responses.
+	@compressible not path /api/files/*/content /dav /dav/*
 	encode @compressible zstd gzip
 
 	# NO request body limit anywhere: resumable uploads (/api/uploads*) send large
@@ -27,6 +28,16 @@
 	# the API enforces the per-user quota before it accepts bytes.
 	# flush_interval -1: stream responses (downloads) instead of buffering them.
 	handle /api/* {
+		reverse_proxy api:4000 {
+			flush_interval -1
+		}
+	}
+
+	# WebDAV for Finder, Explorer and phone file apps (docs: deploy/operations.md). Served by the
+	# API itself, like /api, with the same rule: no body size limit (PUT streams whole files; the
+	# API refuses with 507 once the quota is reached) and no response buffering.
+	@dav path /dav /dav/*
+	handle @dav {
 		reverse_proxy api:4000 {
 			flush_interval -1
 		}
