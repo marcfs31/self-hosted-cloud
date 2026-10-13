@@ -103,6 +103,7 @@ test("the root folder starts empty, shows storage, and has no accessibility viol
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Files",
     "Trash",
+    "Phone backup",
     "Admin",
   ]);
   await expect(page).toHaveTitle(/^Files · Cloud$/);
