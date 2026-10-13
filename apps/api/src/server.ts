@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/client.js";
 import { purgeExpiredTrash } from "./files/trash.js";
+import { EXTRACT_BATCH, extractPending } from "./photos/media-info.js";
 
 const { version } = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -24,6 +25,28 @@ const maintenance = setInterval(() => {
 }, HOUR_MS);
 maintenance.unref();
 
+// Photo dates and sizes are read in the background, one file at a time; a full batch means more
+// are waiting, so keep going until the queue is drained.
+let extracting = false;
+async function extractMediaInfo(): Promise<void> {
+  if (extracting) return;
+  extracting = true;
+  try {
+    let handled: number;
+    do {
+      handled = await extractPending({ db, dataDir: config.dataDir });
+    } while (handled === EXTRACT_BATCH);
+  } catch (err) {
+    console.error("media info extraction failed:", err instanceof Error ? err.name : "unknown");
+  } finally {
+    extracting = false;
+  }
+}
+const EXTRACT_INTERVAL_MS = 15 * 1000;
+const extractor = setInterval(() => void extractMediaInfo(), EXTRACT_INTERVAL_MS);
+extractor.unref();
+void extractMediaInfo();
+
 const server = app.listen(config.port, () => {
   console.log(`api ${version} listening on :${config.port}`);
 });
@@ -31,6 +54,7 @@ const server = app.listen(config.port, () => {
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     clearInterval(maintenance);
+    clearInterval(extractor);
     server.close(() => {
       db.$client.close();
       process.exit(0);

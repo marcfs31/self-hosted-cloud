@@ -19,5 +19,7 @@ export const it: Errors = {
   version_is_current: "Questa è la versione attuale. Ripristina prima un'altra versione.",
   mfa_required: "Inserisci il codice della tua app di autenticazione per continuare.",
   invalid_code: "Quel codice non ha funzionato. Controllalo e riprova.",
+  thumbnail_unavailable: "Anteprima non disponibile per questo file.",
+  share_locked: "Questo link è protetto. Inserisci la password per aprirlo.",
   internal: "Qualcosa è andato storto da parte nostra. Riprova tra un attimo.",
 };

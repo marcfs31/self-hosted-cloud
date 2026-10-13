@@ -21,6 +21,8 @@ export const errorCode = z.enum([
   "version_is_current",
   "mfa_required",
   "invalid_code",
+  "thumbnail_unavailable",
+  "share_locked",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof errorCode>;

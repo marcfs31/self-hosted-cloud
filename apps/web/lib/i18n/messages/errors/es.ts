@@ -19,5 +19,7 @@ export const es: Errors = {
   version_is_current: "Esta es la versión actual. Restaura otra versión primero.",
   mfa_required: "Escribe el código de tu aplicación de autenticación para continuar.",
   invalid_code: "Ese código no ha funcionado. Revísalo e inténtalo de nuevo.",
+  thumbnail_unavailable: "No hay vista previa disponible para este archivo.",
+  share_locked: "Este enlace está protegido. Escribe la contraseña para abrirlo.",
   internal: "Algo ha salido mal por nuestra parte. Inténtalo de nuevo en un momento.",
 };
