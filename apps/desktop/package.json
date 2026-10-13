@@ -2,12 +2,21 @@
   "name": "@cloud/desktop",
   "version": "0.13.0",
   "private": true,
+  "productName": "Cloud",
+  "description": "Menu-bar app that keeps a folder in sync with a Self-Hosted Cloud server.",
   "type": "module",
   "main": "dist/main/main.js",
+  "files": [
+    "dist",
+    "assets"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p src/renderer/tsconfig.json",
     "start": "pnpm build && electron .",
-    "typecheck": "tsc --noEmit",
+    "smoke": "pnpm build && electron . --smoke",
+    "icons": "node packaging/make-icons.ts",
+    "package": "pnpm build && node packaging/package.ts",
+    "typecheck": "tsc --noEmit && tsc -p src/renderer/tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
