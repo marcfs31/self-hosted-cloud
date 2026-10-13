@@ -17,7 +17,11 @@ export interface Scan {
   actual: Map<string, string>;
   /** Items the server would refuse (names that break the fileName rules). */
   rejected: Set<string>;
-  /** Folders that could not be read: nothing under them may be concluded from absence. */
+  /**
+   * Folders that could not be read, and entries that are neither a regular file nor a real
+   * folder (symlinks, sockets, devices): nothing is written at or under them, and nothing may be
+   * concluded from their absence from `items`.
+   */
   unreadable: Set<string>;
 }
 
@@ -55,11 +59,16 @@ export async function scanLocal(
         }
         continue;
       }
-      if (!entry.isFile() && !entry.isDirectory()) continue; // symlinks, sockets, devices
       const parsed = fileName.safeParse(entry.name);
       const name = parsed.success ? parsed.data : entry.name.normalize("NFC");
       const rel = joinPath(dirRel, name);
       const actualRel = joinPath(dirActual, entry.name);
+      if (!entry.isFile() && !entry.isDirectory()) {
+        // A symlink is never followed: writing "into" it would leave the sync folder, and its
+        // absence from `items` must not read as "deleted here, so trash it on the server".
+        scan.unreadable.add(rel);
+        continue;
+      }
       if (!parsed.success) {
         scan.rejected.add(rel);
         continue;

@@ -8,6 +8,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -20,6 +21,7 @@ import {
   put,
   snapshotDir,
   SpyApi,
+  tempDir,
   text,
   waitFor,
   type Account,
@@ -587,6 +589,66 @@ describe("awkward combinations", () => {
     await acc.web.write("swap", "now a file");
     await dev.sync();
     expect(snapshotDir(dev.dir)).toEqual({ swap: "now a file" });
+  });
+});
+
+describe("symlinks", () => {
+  it("never writes through a symlinked folder, and never reads its absence as a deletion", async () => {
+    const acc = await newAccount(api);
+    await acc.web.write("Projects/readme.txt", "remote");
+    const dev = newDevice(api, acc);
+    const outside = tempDir("outside");
+    symlinkSync(outside, join(dev.dir, "Projects"));
+
+    expect(await dev.sync()).toMatchObject({ downloaded: 0, trashedRemote: 0, errors: 0 });
+    expect(readdirSync(outside)).toEqual([]);
+    // A second pass is where the old engine called the folder "deleted here" and trashed it.
+    expect(await dev.sync()).toMatchObject({ downloaded: 0, trashedRemote: 0, errors: 0 });
+    expect(readdirSync(outside)).toEqual([]);
+    expect([...(await acc.web.tree()).keys()].sort()).toEqual(["Projects", "Projects/readme.txt"]);
+    expect(await acc.web.trashNames()).toEqual([]);
+  });
+
+  it("a synced folder swapped for a symlink is not trashed on the server, and its target is not uploaded", async () => {
+    const { acc, dev } = await twoWaySynced({ "Projects/readme.txt": "remote" });
+    const outside = tempDir("outside");
+    put(outside, "private.txt", "not for the cloud");
+    rmSync(join(dev.dir, "Projects"), { recursive: true });
+    symlinkSync(outside, join(dev.dir, "Projects"));
+
+    expect(await dev.sync()).toMatchObject({ uploaded: 0, trashedRemote: 0, trashedLocal: 0 });
+    expect([...(await acc.web.tree()).keys()].sort()).toEqual(["Projects", "Projects/readme.txt"]);
+    expect(await acc.web.trashNames()).toEqual([]);
+    expect(readdirSync(outside)).toEqual(["private.txt"]);
+  });
+
+  it("leaves a symlinked file alone: not overwritten, not uploaded, not trashed remotely", async () => {
+    const acc = await newAccount(api);
+    await acc.web.write("notes.txt", "remote");
+    const dev = newDevice(api, acc);
+    const outside = tempDir("outside");
+    put(outside, "target.txt", "original");
+    symlinkSync(join(outside, "target.txt"), join(dev.dir, "notes.txt"));
+
+    await dev.sync();
+    await dev.sync();
+    expect(text(outside, "target.txt")).toBe("original");
+    expect(await acc.web.content("notes.txt")).toBe("remote");
+    expect(await acc.web.trashNames()).toEqual([]);
+  });
+
+  it("refuses a remote move whose destination folder has become a symlink", async () => {
+    const { acc, dev } = await twoWaySynced({ "dir/a.txt": "a", "Other/keep.txt": "k" });
+    const outside = tempDir("outside");
+    rmSync(join(dev.dir, "Other"), { recursive: true });
+    symlinkSync(outside, join(dev.dir, "Other"));
+    await acc.web.move("dir/a.txt", "Other");
+
+    await dev.sync();
+    await dev.sync();
+    expect(readdirSync(outside)).toEqual([]);
+    expect((await acc.web.tree()).has("Other/a.txt")).toBe(true);
+    expect((await acc.web.tree()).has("Other/keep.txt")).toBe(true);
   });
 });
 

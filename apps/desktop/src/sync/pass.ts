@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { uniqueName, type FileKind, type FileNode } from "@cloud/shared";
 import { ApiError, NetworkError, type SyncApi } from "../api/client.js";
 import { isIgnoredPath, TEMP_PREFIX } from "./ignore.js";
@@ -257,6 +257,8 @@ export class SyncPass {
       const src = join(this.env.localRoot, path);
       const dst = join(this.env.localRoot, newPath);
       try {
+        await this.assertInsideRoot(src);
+        await this.assertInsideRoot(dst);
         const from = await statOf(src);
         if (from?.kind !== entry.kind) continue;
         const to = await statOf(dst);
@@ -857,8 +859,32 @@ export class SyncPass {
     }
   }
 
+  /**
+   * Backstop for every local write: each existing ancestor below the sync root must be a real
+   * folder. A symlink there (planted, or made by the user after the scan) would send the write
+   * outside the sync folder.
+   */
+  private async assertInsideRoot(abs: string): Promise<void> {
+    const parts = relative(this.env.localRoot, dirname(abs)).split(sep).filter(Boolean);
+    let current = this.env.localRoot;
+    for (const part of parts) {
+      current = join(current, part);
+      let st;
+      try {
+        st = await lstat(current);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+        throw err;
+      }
+      if (!st.isDirectory()) {
+        throw Object.assign(new Error("unsafe_path"), { code: "unsafe_path" });
+      }
+    }
+  }
+
   private async doMkdirLocal(key: string, remote: RemoteNode): Promise<void> {
     this.requireParent(key);
+    await this.assertInsideRoot(this.abs(key));
     await mkdir(this.abs(key), { recursive: true });
     this.store.set(key, {
       fileId: remote.id,
@@ -877,6 +903,7 @@ export class SyncPass {
   ): Promise<void> {
     if (remote.versionId === null) throw new ApiError(404, "not_found");
     this.requireParent(key);
+    await this.assertInsideRoot(this.abs(key));
     const target = this.abs(key);
     const tmp = join(dirname(target), `${TEMP_PREFIX}${randomUUID()}`);
     const { size, sha256 } = await this.env.api.download(remote.id, remote.versionId, tmp);
@@ -943,6 +970,7 @@ export class SyncPass {
   }
 
   private async doTrashLocal(key: string, expected: LocalItem, tree: boolean): Promise<void> {
+    await this.assertInsideRoot(this.abs(key));
     if (expected.kind === "file") await this.assertTarget(key, expected);
     await this.env.trashItem(this.abs(key));
     if (tree) this.store.deleteTree(key);
@@ -953,6 +981,7 @@ export class SyncPass {
   /** Both sides changed: the local file keeps its content under a conflicted name, the server's wins the name. */
   private async doConflict(key: string, local: LocalItem, remote: RemoteNode): Promise<void> {
     this.requireParent(key);
+    await this.assertInsideRoot(this.abs(key));
     if (local.kind === "file") await this.assertTarget(key, local);
     const abs = this.abs(key);
     const dir = dirname(abs);
