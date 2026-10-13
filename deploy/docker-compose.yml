@@ -19,7 +19,7 @@ x-hardening: &hardening
 
 services:
   caddy:
-    image: caddy:2
+    image: caddy:2@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
     restart: unless-stopped
     <<: *hardening
     # Caddy must bind 80/443 and write its own state (volumes below).
