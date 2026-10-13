@@ -38,7 +38,9 @@ jobs:
         shell: bash
         env:
           TARGETS: ${{ matrix.targets }}
-        run: pnpm --filter @cloud/desktop package $TARGETS
+        run: |
+          read -ra platforms <<< "$TARGETS"
+          pnpm --filter @cloud/desktop package "${platforms[@]}"
       # ditto keeps the symlinks inside a macOS bundle; the other archives do not need it.
       - name: Archive (macOS)
         if: runner.os == 'macOS'
