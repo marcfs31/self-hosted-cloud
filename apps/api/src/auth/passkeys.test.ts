@@ -15,7 +15,7 @@ import { meResponse, passkeyList, passkey as passkeySchema } from "@cloud/shared
 import { createApp } from "../app.js";
 import type { Config } from "../config.js";
 import { openDatabase } from "../db/client.js";
-import { activity, passkeys, sessions } from "../db/schema.js";
+import { activity, passkeys, sessions } from "../db/schema/index.js";
 
 const ORIGIN = "https://cloud.example.com";
 const PASSWORD = "correct horse battery";

@@ -19,7 +19,7 @@ import {
 import { recordActivity } from "../activity/record.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
-import { passkeys, users } from "../db/schema.js";
+import { passkeys, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { CHALLENGE_TTL_MS, createChallengeStore, type ChallengePurpose } from "./challenges.js";
 import { createRateLimiter, FAILURE_LIMIT } from "./rate-limit.js";
