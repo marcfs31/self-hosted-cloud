@@ -4,7 +4,7 @@ import { parseCookie, stringifySetCookie } from "cookie";
 import type { Role, User } from "@cloud/shared";
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
-import { sessions, users } from "../db/schema.js";
+import { sessions, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { hashToken, newToken } from "./tokens.js";
 

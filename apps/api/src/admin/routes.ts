@@ -12,7 +12,7 @@ import {
 import { toUser, authOf, type SessionService } from "../auth/sessions.js";
 import { hashToken, newToken } from "../auth/tokens.js";
 import type { Db } from "../db/client.js";
-import { invites, users } from "../db/schema.js";
+import { fileVersions, invites, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,7 +42,20 @@ export function createAdminRouter(opts: {
       .from(users)
       .orderBy(asc(users.createdAt), asc(sql`rowid`))
       .all();
-    const body: ListUsersResponse = { users: rows.map(toUser) };
+    const used = new Map(
+      db
+        .select({
+          ownerId: fileVersions.ownerId,
+          n: sql<number>`sum(${fileVersions.size})`.mapWith(Number),
+        })
+        .from(fileVersions)
+        .groupBy(fileVersions.ownerId)
+        .all()
+        .map((r) => [r.ownerId, r.n]),
+    );
+    const body: ListUsersResponse = {
+      users: rows.map((row) => ({ ...toUser(row), usedBytes: used.get(row.id) ?? 0 })),
+    };
     res.json(body);
   });
 

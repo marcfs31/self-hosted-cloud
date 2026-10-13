@@ -15,7 +15,7 @@ import {
 import { createApp } from "../app.js";
 import type { Config } from "../config.js";
 import { openDatabase } from "../db/client.js";
-import { invites, sessions, users } from "../db/schema.js";
+import { invites, sessions, users } from "../db/schema/index.js";
 
 const ORIGIN = "http://localhost:3000";
 const PASSWORD = "correct horse battery";

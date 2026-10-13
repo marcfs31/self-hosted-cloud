@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import * as schema from "./schema.js";
+import * as schema from "./schema/index.js";
 
 export type Db = ReturnType<typeof createDrizzle>;
 

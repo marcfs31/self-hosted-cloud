@@ -9,7 +9,7 @@ import {
   type SetupStatusResponse,
 } from "@cloud/shared";
 import type { Db } from "../db/client.js";
-import { invites, sessions, users } from "../db/schema.js";
+import { invites, sessions, users } from "../db/schema/index.js";
 import { HttpError } from "../http/errors.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import { createRateLimiter } from "./rate-limit.js";
