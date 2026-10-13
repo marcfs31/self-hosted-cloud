@@ -4,7 +4,8 @@
     "noEmit": false,
     "rootDir": "src",
     "outDir": "dist",
-    "customConditions": []
+    "customConditions": [],
+    "allowImportingTsExtensions": false
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/testing", "src/renderer"]

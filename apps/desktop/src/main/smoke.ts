@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from "electron";
-import { loadTrayIcon } from "./icons.js";
+import { loadAppIcon, loadTrayIcon } from "./icons.js";
 import type { SettingsWindow } from "./settings-window.js";
 import type { SyncController } from "./sync-controller.js";
 
@@ -56,6 +56,7 @@ export async function runSmoke(context: SmokeContext): Promise<never> {
   }, 30_000);
   try {
     loadTrayIcon(context.assetsDir, process.platform);
+    loadAppIcon(context.assetsDir);
     await context.controller.apply();
     if (context.controller.status.state !== "unconfigured") {
       throw new Error(`expected an unconfigured profile, got ${context.controller.status.state}`);

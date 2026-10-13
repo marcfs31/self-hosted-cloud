@@ -4,6 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import type { Dictionary } from "../i18n/index.js";
 import type { Channel, InitialState, StatusView } from "../ipc/types.js";
 import type { SettingsService } from "./settings-service.js";
+import { loadAppIcon } from "./icons.js";
 import { isTrustedSender } from "./trusted-sender.js";
 
 export interface SettingsWindowOptions {
@@ -60,6 +61,9 @@ export class SettingsWindow {
       minWidth: 320,
       minHeight: 480,
       show: false,
+      ...(process.platform === "darwin"
+        ? {}
+        : { icon: loadAppIcon(join(this.options.appRoot, "assets")) }),
       title: this.options.dict.settings.windowTitle,
       autoHideMenuBar: true,
       webPreferences: {
