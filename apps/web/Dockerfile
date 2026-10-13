@@ -7,6 +7,12 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true \
     NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
+# Toolchain for native modules (better-sqlite3 is in the workspace lockfile, and pnpm fetch runs
+# its install script) when no prebuilt binary matches. Same as apps/api/Dockerfile; the runtime
+# stage starts from a fresh base image and never inherits it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm fetch
