@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-13
+
+### Added
+
+- `POST /api/auth/sessions/revoke-others` ends every other session of the signed-in user.
+
+### Security
+
+- Login, two-step disable, share-password and passkey guesses are counted before the password
+  check, so parallel requests can no longer exceed the limit; a per-account limit bounds
+  guessing from many addresses.
+- Turning two-step verification on or off ends your other sessions; an admin reset ends all
+  of that user's sessions.
+- Thumbnails refuse images whose decode would exhaust memory (decompression bombs).
+- One quota ledger covers tus, drop-box and WebDAV transfers, so concurrent uploads cannot
+  overrun the quota or the disk; drop boxes get their own bounded budget and idle reservations
+  expire.
+- The desktop app never writes through or trashes across a symlink in the sync folder.
+- The post-login redirect only follows same-origin paths (open redirect closed).
+
 ## [0.15.0] - 2026-10-13
 
 ### Added
