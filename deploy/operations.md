@@ -419,8 +419,19 @@ FolderSync (set the account type to WebDAV, server `<host>`, path `/dav/`, port 
 
 - **Locks are advisory and per process.** LOCK/UNLOCK (class 2, exclusive write, up to one hour,
   refreshable) are kept in the API's memory: they only constrain other WebDAV requests, not the
-  web UI, the API or tus uploads, and a restart of the API forgets them (clients re-lock). The
-  `If` header is checked for lock tokens only; ETag conditions in it are ignored.
+  web UI, the API or tus uploads, and a restart of the API forgets them (clients re-lock).
+  Only exclusive locks exist: a `LOCK` asking for a shared scope is answered `400`, and
+  `supportedlock` lists exclusive write only.
+- **The `If` header is evaluated in full** (lock tokens, entity tags, `Not`, tagged lists) on
+  PUT, DELETE, MKCOL, MOVE, COPY, PROPPATCH and LOCK: when none of its lists holds the request
+  fails with `412`, locked or not. A missing token on a locked resource is `423`.
+- **Dead properties** (PROPPATCH) are stored per file and folder in the database and follow
+  rename, move and COPY; trashing keeps them and emptying the trash removes them. Properties in
+  the `DAV:` namespace are all protected (`403`). A resource holds at most 100 properties, each
+  at most 16 KiB and 128 KiB in total; what does not fit is answered `507` in the
+  multi-status, and a PROPPATCH is all or nothing (the others report `424`).
+- **Conformance:** `litmus` 0.13 passes basic, copymove, props and http completely and locks
+  except `lock_shared` (and the tests that depend on a shared lock).
 - **Depth: infinity PROPFIND is refused** (403, `propfind-finite-depth`); clients list one folder
   at a time.
 - **Names** follow the web UI's rules: no `/` or `\`, no control characters, at most 255

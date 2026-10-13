@@ -257,8 +257,11 @@ Open before 1.0 (the 1.0 gate is a verified run on a real Pi 5):
 - Verified 2026-10-13: the arm64 api image (725 MB) builds and runs as `node`; sharp 0.35.5 and
   ffmpeg/ffprobe 5.1 work inside it; health, setup, a tus upload, a WebP thumbnail and the change
   feed pass against the running container.
-- Not verified here: the Caddyfile (`caddy validate`), WebDAV against `litmus`, Finder/Explorer
-  mounts, desktop builds other than macOS arm64, Android share target on a real device.
+- Verified 2026-10-13: WebDAV against `litmus` 0.13 (Debian package): basic 16/16, copymove 13/13,
+  props 30/30, http 4/4, locks 33/34. The one failure is `lock_shared`: only exclusive locks
+  exist (RFC 4918 permits that), so the 7 tests that need a shared lock are skipped.
+- Not verified here: the Caddyfile (`caddy validate`), Finder/Explorer mounts, desktop builds
+  other than macOS arm64, Android share target on a real device.
 - Low-severity review findings, deferred: step-up re-authentication before creating app
   passwords/passkeys; a Content-Security-Policy for the web app; CLI refusing plain http to
   non-localhost servers; expiry for share-target files cached by the service worker;
