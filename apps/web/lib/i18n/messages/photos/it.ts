@@ -1,0 +1,102 @@
+import { isOne } from "../../plural";
+import type { Photos } from "./en";
+
+export const it: Photos = {
+  nav: "Foto",
+  title: "Foto",
+  loading: "Caricamento delle tue foto…",
+  loadingMore: "Caricamento di altre foto…",
+  count: (n) => `${n} foto`,
+  countSoFar: (n) => `${n} foto finora`,
+  loadMore: "Carica altre",
+  cancel: "Annulla",
+  video: "Video",
+  empty: {
+    title: "Ancora nessuna foto",
+    hint: "Le immagini e i video che carichi nei tuoi file compaiono qui, dai più recenti.",
+  },
+  toolbar: {
+    label: "Azioni sulle foto",
+    albums: "Album",
+  },
+  select: {
+    start: "Seleziona foto",
+    cancel: "Annulla selezione",
+    count: (n) => (isOne("it", n) ? `${n} selezionata` : `${n} selezionate`),
+    label: (name) => `Seleziona ${name}`,
+    addToAlbum: "Aggiungi a un album…",
+  },
+  lightbox: {
+    close: "Chiudi",
+    previous: "Foto precedente",
+    next: "Foto successiva",
+    position: (n, total) => `${n} di ${total}`,
+    taken: (date) => `Scattata il ${date}`,
+    uploaded: (date) => `Data di caricamento: ${date}`,
+    openOriginal: "Apri l'originale",
+    noPreview: "Per questo file non è disponibile un'anteprima.",
+  },
+  addDialog: {
+    title: (n) => `Aggiungi ${n} foto a un album`,
+    loading: "Caricamento dei tuoi album…",
+    existing: "I tuoi album",
+    none: "Non hai ancora nessun album. Creane uno qui sotto.",
+    newLabel: "Nome di un nuovo album",
+    create: "Crea l'album e aggiungi",
+    creating: "Creazione…",
+    adding: "Aggiunta…",
+    required: "Inserisci un nome per l'album.",
+  },
+  albums: {
+    title: "Album",
+    loading: "Caricamento dei tuoi album…",
+    back: "Tutti gli album",
+    listLabel: "I tuoi album",
+    toolbarLabel: "Azioni sull'album",
+    photos: (n) => `${n} foto`,
+    empty: {
+      title: "Ancora nessun album",
+      hint: "Scegli Seleziona foto nella tua cronologia, poi aggiungile a un album.",
+    },
+    emptyAlbum: {
+      title: "Questo album è vuoto",
+      hint: "Scegli Seleziona foto nella tua cronologia, poi aggiungile a questo album.",
+    },
+    new: "Nuovo album",
+    newDialog: {
+      title: "Nuovo album",
+      label: "Nome dell'album",
+      submit: "Crea album",
+      submitting: "Creazione…",
+      required: "Inserisci un nome per l'album.",
+    },
+    rename: "Rinomina",
+    renameLabel: (name) => `Rinomina ${name}`,
+    renameDialog: {
+      title: (name) => `Rinomina ${name}`,
+      label: "Nome dell'album",
+      submit: "Rinomina",
+      submitting: "Rinomina in corso…",
+      required: "Inserisci un nome per l'album.",
+    },
+    delete: "Elimina",
+    deleteLabel: (name) => `Elimina ${name}`,
+    deleteAlbum: "Elimina album",
+    confirm: {
+      title: "Eliminare questo album?",
+      body: (name) => `${name} verrà eliminato. Le foto al suo interno restano nei tuoi file.`,
+      submit: "Elimina album",
+      deleting: "Eliminazione…",
+    },
+    remove: "Rimuovi dall'album",
+  },
+  notices: {
+    added: (n, album) =>
+      isOne("it", n) ? `${n} foto aggiunta a ${album}` : `${n} foto aggiunte a ${album}`,
+    created: (name) => `Album ${name} creato`,
+    deleted: (name) => `Album ${name} eliminato`,
+    renamed: (name) => `Album rinominato in ${name}`,
+    removed: (n, album) =>
+      isOne("it", n) ? `${n} foto rimossa da ${album}` : `${n} foto rimosse da ${album}`,
+  },
+};

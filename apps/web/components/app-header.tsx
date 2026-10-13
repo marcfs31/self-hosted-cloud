@@ -52,6 +52,13 @@ export function AppHeader() {
               />
             </li>
             <li>
+              <NavLink
+                href="/photos"
+                label={t.photos.nav}
+                current={pathname === "/photos" || pathname.startsWith("/albums")}
+              />
+            </li>
+            <li>
               <NavLink href="/trash" label={t.common.nav.trash} current={pathname === "/trash"} />
             </li>
             {user.role === "admin" ? (
