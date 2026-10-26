@@ -2,7 +2,7 @@
 # Build from the repo root:  docker buildx build -f apps/api/Dockerfile -t cloud-api .
 
 # ---- fetch: lockfile-only layer, cached until pnpm-lock.yaml (or the pinned pnpm) changes
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS fetch
+FROM node:24-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS fetch
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true
 RUN corepack enable
@@ -34,7 +34,7 @@ RUN mkdir -p apps/api/drizzle
 RUN pnpm --config.inject-workspace-packages=true --filter @cloud/api deploy --prod /out
 
 # ---- runtime
-FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
+FROM node:24-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
 ENV NODE_ENV=production \
     DATA_DIR=/data
 WORKDIR /app
