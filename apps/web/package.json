@@ -17,7 +17,7 @@
   "dependencies": {
     "@cloud/shared": "workspace:*",
     "@simplewebauthn/browser": "^14.0.0",
-    "next": "^16.4.0",
+    "next": "^16.4.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tus-js-client": "^4.3.1"
